@@ -9,8 +9,7 @@ enum MESIState { INVALID,
 enum OpType { READ,
               WRITE };
 enum BusOp { BUS_RD,
-             BUS_RDX,
-             BUS_UPDATE };
+             BUS_RDX };
 
 // Structure for a cache line
 struct CacheLine {
@@ -49,7 +48,7 @@ class Cache {
 
   void update_lru(int set_index, int way) {
     for (int i = 0; i < associativity; i++) {
-      if (cache_array[set_index][i].state != INVALID && i != way) {
+      if (cache_array[set_index][i].state != INVALID) {
         cache_array[set_index][i].lru_order++;
       }
     }
@@ -139,7 +138,6 @@ class Cache {
           line.state = INVALID;
           return true;  // Invalidation occurred
         }
-        // TODO: Handle BUS_UPDATE if needed
         break;
       }
     }
@@ -237,20 +235,15 @@ class Bus {
       }
       int block_size = caches[0]->get_block_size();
       int N = block_size / 4;
-      if (current_transaction.op == BUS_UPDATE) {
-        remaining_cycles = 2;
-        data_traffic += 4;
+      if (found) {
+        remaining_cycles = 2 * N;
       } else {
-        if (found) {
-          remaining_cycles = 2 * N;
-        } else {
-          remaining_cycles = 100;
-        }
-        if (current_transaction.needs_writeback) {
-          remaining_cycles += 100;  // Add writeback time
-        }
-        data_traffic += block_size;
+        remaining_cycles = 100;
       }
+      if (current_transaction.needs_writeback) {
+        remaining_cycles += 100;  // Add writeback time
+      }
+      data_traffic += block_size;
     } else {
       remaining_cycles = 0;
     }
