@@ -1,0 +1,31 @@
+Core 0:
+Instructions: 3270132
+Total Cycles: 240582510:
+Idle Cycles: 237312577
+Miss Rate: 0.1942
+Evictions: 634999
+Writebacks: 189332
+Core 1:
+Instructions: 3287252
+Total Cycles: 240561008:
+Idle Cycles: 237273756
+Miss Rate: 0.1931
+Evictions: 634881
+Writebacks: 190520
+Core 2:
+Instructions: 117698
+Total Cycles: 16917734:
+Idle Cycles: 16800651
+Miss Rate: 0.2863
+Evictions: 33686
+Writebacks: 11859
+Core 3:
+Instructions: 3324919
+Total Cycles: 242870627:
+Idle Cycles: 239545708
+Miss Rate: 0.1963
+Evictions: 652641
+Writebacks: 196204
+System:
+Invalidations: 98
+Bus Traffic: 62606176 bytes

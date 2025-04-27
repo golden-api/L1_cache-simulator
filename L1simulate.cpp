@@ -346,9 +346,10 @@ class Core {
 
   void set_stalled(bool stalled) { is_stalled = stalled; }
   void increment_idle_cycles() { idle_cycles++; }
-  void set_total_cycles(uint64_t cycles) { total_cycles = cycles; }
+  // void set_total_cycles(uint64_t cycles) { total_cycles = cycles; }
   int get_id() const { return id; }
   int get_instruction_count() const { return instruction_count; }
+  void increment_total_cycles() { total_cycles++; }
   uint64_t get_total_cycles() const { return total_cycles; }
   uint64_t get_idle_cycles() const { return idle_cycles; }
   double get_miss_rate() const {
@@ -370,7 +371,7 @@ class Simulator {
   int assoc;
   int block_offset_bits;
   string output_file;
-  uint64_t global_cycle;
+  // uint64_t global_cycle;
 
   vector<Cache*> get_caches() {
     vector<Cache*> caches;
@@ -380,7 +381,7 @@ class Simulator {
 
  public:
   Simulator(const string& app, int s, int E, int b, const string& out)
-      : app_name(app), set_index_bits(s), assoc(E), block_offset_bits(b), output_file(out), global_cycle(0) {
+      : app_name(app), set_index_bits(s), assoc(E), block_offset_bits(b), output_file(out) {
     bus = new Bus();
     for (int i = 0; i < 4; i++) {
       string trace = app_name + "_proc" + to_string(i) + ".trace";
@@ -428,6 +429,9 @@ class Simulator {
 
       // Process each core
       for (auto& core : cores) {
+        if (core->has_next_instruction()) {
+          core->increment_total_cycles();
+        }
         if (!core->get_is_stalled() and core->has_next_instruction()) {
           core->process_instruction(bus);
         } else if (core->get_is_stalled()) {
@@ -437,10 +441,7 @@ class Simulator {
 
       // Commit transactions for this cycle with randomization
       bus->commit_transactions();
-
-      global_cycle++;
     }
-    for (auto& core : cores) core->set_total_cycles(global_cycle);
   }
 
   // **Write output to file**
