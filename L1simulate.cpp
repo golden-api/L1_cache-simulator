@@ -147,10 +147,10 @@ class Cache {
     }
 
     // Install new line
-    victim_line.tag = tag;
-    victim_line.state = (op == READ ? EXCLUSIVE : MODIFIED);  // Tentative state
-    victim_line.dirty = (op == WRITE);
-    update_lru(set_index, victim);
+    // victim_line.tag = tag;
+    // victim_line.state = (op == READ ? EXCLUSIVE : MODIFIED);  // Tentative state
+    // victim_line.dirty = (op == WRITE);
+    // update_lru(set_index, victim);
     cout << "Installed new line with state " << (op == READ ? "EXCLUSIVE" : "MODIFIED") << endl;
 
     return false;
@@ -275,6 +275,21 @@ class Bus {
 
   // **Collect transaction for the current cycle**
   void add_transaction(const BusTransaction& trans) {
+    // Coalesce duplicate BUS_RD for the same block
+    if (trans.op == BUS_RD) {
+      // Check if a BUS_RD for this block is already pending or active
+      if (current_transaction.core_id != -1 && current_transaction.op == BUS_RD && current_transaction.block_addr == trans.block_addr) {
+        return;  // skip duplicate read
+      }
+      queue<BusTransaction> temp = pending;
+      while (!temp.empty()) {
+        BusTransaction t = temp.front();
+        temp.pop();
+        if (t.op == BUS_RD && t.block_addr == trans.block_addr) {
+          return;  // skip duplicate read
+        }
+      }
+    }
     cycle_transactions.push_back(trans);
   }
 
@@ -336,7 +351,7 @@ class Bus {
   }
 
   bool is_busy() const { return remaining_cycles > 0; }
-  const BusTransaction& get_current_transaction() const { return current_transaction; }
+  BusTransaction& get_current_transaction() { return current_transaction; }
   int get_invalidations() const { return invalidations; }
   uint64_t get_data_traffic() const { return data_traffic; }
   void increment_invalidations() { invalidations++; }
@@ -446,23 +461,35 @@ class Simulator {
   // **Run the simulation**
   void run() {
     while (true) {
-      // Process bus transactions
+      // Process bus transaction
       if (bus->is_busy()) {
-        if (bus->process_cycle()) {  // Corrected from bus->cycle()
-          int core_id = bus->get_current_transaction().core_id;
-          if (core_id >= 0 && core_id < 4) {
-            cores[core_id]->set_stalled(false);
-            cores[core_id]->get_cache()->update_after_bus(bus->get_current_transaction());
+        if (bus->process_cycle()) {
+          BusTransaction& done = bus->get_current_transaction();
+          int done_cid = done.core_id;
+          if (done_cid >= 0 && done_cid < 4) {
+            cores[done_cid]->set_stalled(false);
+            cores[done_cid]->get_cache()->update_after_bus(done);
           }
           for (int i = 0; i < 4; i++) {
-            if (i != core_id) {
-              if (cores[i]->get_cache()->snoop(bus->get_current_transaction())) {
+            if (i != done_cid) {
+              if (cores[i]->get_cache()->snoop(done)) {
                 bus->increment_invalidations();
               }
             }
           }
+          for (auto& core : cores) {
+            if (core->get_id() != done_cid && core->get_is_stalled()) {
+              // If this core was waiting on the same block, give it the block too
+              // (One way: check if core's access was for the same block_addr – you may need to store that)
+              core->set_stalled(false);
+              core->get_cache()->update_after_bus(done);
+            }
+          }
         }
-      } else if (!bus->is_pending_empty()) {
+      }
+
+      // Start next transaction if bus is idle
+      if (!bus->is_busy() && bus->has_pending()) {
         bus->start_next_transaction(get_caches());
       }
 
@@ -482,7 +509,7 @@ class Simulator {
         }
       }
 
-      // Commit transactions for this cycle with randomization
+      // Commit transactions for this cycle
       bus->commit_transactions();
 
       // Check if simulation is complete
@@ -498,6 +525,7 @@ class Simulator {
       }
     }
   }
+
   // **Write output to file**
   void write_output() {
     ofstream out(output_file);

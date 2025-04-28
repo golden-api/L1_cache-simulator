@@ -6,10 +6,10 @@ Miss Rate: 1.0000
 Evictions: 0
 Writebacks: 0
 Core 1:
-Instructions: 0
-Total Cycles: 0:
-Idle Cycles: 0
-Miss Rate: 0.0000
+Instructions: 1
+Total Cycles: 101:
+Idle Cycles: 101
+Miss Rate: 1.0000
 Evictions: 0
 Writebacks: 0
 Core 2:
@@ -28,4 +28,4 @@ Evictions: 0
 Writebacks: 0
 System:
 Invalidations: 0
-Bus Traffic: 32 bytes
+Bus Traffic: 64 bytes

@@ -5,6 +5,7 @@
         "iosfwd": "cpp",
         "new": "cpp",
         "*.tcc": "cpp",
-        "ostream": "cpp"
+        "ostream": "cpp",
+        "coroutine": "cpp"
     }
 }
