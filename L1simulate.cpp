@@ -393,6 +393,9 @@ class Core {
     }
     bool hit = cache->access(addr, op_type, needs_bus, bus_op, block_addr, needs_writeback);
     total_cycles++;
+    if (hit) {
+      cout << "Core " << id << ": Cache hit for address 0x" << hex << addr << dec << endl;
+    }
     if (!hit || needs_bus) {
       BusTransaction trans(id, bus_op, addr, block_addr, needs_writeback);
       bus->add_transaction(trans);
@@ -467,6 +470,7 @@ class Simulator {
   }
 
   void run() {
+    int start_core = 0;
     while (true) {
       if (bus->is_busy()) {
         if (bus->process_cycle(cores)) {
@@ -504,13 +508,13 @@ class Simulator {
         bus->start_next_transaction(get_caches());
       }
 
-      for (auto& core : cores) {
-        int cid = core->get_id();
+      for (int i = 0; i < 4; i++) {
+        int cid = (start_core + i) % 4;
+        Core* core = cores[cid];
 
         if (!core->get_is_stalled() && core->has_next_instruction()) {
           core->process_instruction(bus);
         } else if (core->get_is_stalled()) {
-          // Bus owner executes; others idle
           if (bus->is_busy() && cid == bus->get_current_transaction().core_id) {
             core->increment_total_cycles();
           } else {
@@ -520,6 +524,7 @@ class Simulator {
       }
 
       bus->commit_transactions();
+      start_core = (start_core + 1) % 4;
 
       bool all_done = true;
       for (auto& core : cores) {

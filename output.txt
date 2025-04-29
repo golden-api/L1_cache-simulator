@@ -12,26 +12,26 @@ Replacement Policy: LRU
 Bus: Central snooping bus
 
 Core 0 Statistics:
-Total Instructions: 2
-Total Reads: 1
+Total Instructions: 1
+Total Reads: 0
 Total Writes: 1
 Total Execution Cycles: 102
 Idle Cycles: 0
 Cache Misses: 1
-Cache Miss Rate: 50.00%
+Cache Miss Rate: 100.00%
 Cache Evictions: 0
 Writebacks: 1
 Bus Invalidations: 1
 Data Traffic (Bytes): 32
 
 Core 1 Statistics:
-Total Instructions: 1
-Total Reads: 0
+Total Instructions: 2
+Total Reads: 1
 Total Writes: 1
-Total Execution Cycles: 202
-Idle Cycles: 100
+Total Execution Cycles: 320
+Idle Cycles: 101
 Cache Misses: 1
-Cache Miss Rate: 100.00%
+Cache Miss Rate: 50.00%
 Cache Evictions: 0
 Writebacks: 0
 Bus Invalidations: 0
@@ -64,5 +64,5 @@ Bus Invalidations: 0
 Data Traffic (Bytes): 32
 
 Overall Bus Summary:
-Total Bus Transactions: 2
-Total Bus Traffic (Bytes): 64
+Total Bus Transactions: 3
+Total Bus Traffic (Bytes): 96
