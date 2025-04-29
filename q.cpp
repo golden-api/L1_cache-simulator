@@ -197,12 +197,11 @@ long long Bus::handleBusRd(int cid, int allocIdx, uint32_t blockId,
   busNextFree = endTime;
   return endTime;
 }
-
-// BusRdX implementation (for write miss / RWITM)
 long long Bus::handleBusRdX(int cid, int allocIdx, uint32_t blockId,
                             long long requestTime, Core *cores[]) {
-  int ownerM = -1;
+  // Gather which other caches hold this block
   vector<int> sharers;
+  int ownerM = -1;
   for (int i = 0; i < numCores; i++) {
     if (i == cid) continue;
     Cache *c = caches[i];
@@ -211,31 +210,38 @@ long long Bus::handleBusRdX(int cid, int allocIdx, uint32_t blockId,
       State st = c->getLine(idx).state;
       if (st == M) {
         ownerM = i;
-        break;
       } else if (st == S || st == E) {
         sharers.push_back(i);
       }
     }
   }
+
+  // Serialize on the bus
   long long start = max(requestTime, busNextFree);
   long long endTime = start;
   transactions++;
 
+  // 1) If someone has Modified, they must write it back (100 cycles),
+  //    then we read from memory (another 100).
   if (ownerM != -1) {
-    // Another core has it in M: that core must write-back and invalidate
     Cache *ownerCache = caches[ownerM];
     int ownerIdx = ownerCache->findLine(blockId);
-    endTime = start + 100;  // write-back
+    // write-back dirty line to memory
+    endTime = start + 100;
     traffic += blockSize;
     cores[ownerM]->stats.writebacks++;
-    // FIX (MESI): M -> I on owner (invalidate its dirty copy)
     ownerCache->getLine(ownerIdx).state = I;
-    cores[cid]->stats.invalidations++;  // FIX: Count invalidation as owner loses M copy
-    endTime += 100 ;     // send block to requester
+    // Invalidate owner's copy
+    cores[cid]->stats.invalidations++;
+
+    // now fetch from memory
+    endTime += 100;
     traffic += blockSize;
-    // Requestor gets M
     caches[cid]->getLine(allocIdx).state = M;
-    // Invalidate any shared/E copies
+  }
+  // 2) If others have Shared or Exclusive, just invalidate them and read from memory
+  else if (!sharers.empty()) {
+    // invalidate all sharers
     for (int other : sharers) {
       Cache *c = caches[other];
       int idx = c->findLine(blockId);
@@ -244,32 +250,22 @@ long long Bus::handleBusRdX(int cid, int allocIdx, uint32_t blockId,
         cores[cid]->stats.invalidations++;
       }
     }
-    cores[cid]->stats.dataTraffic += blockSize;
-  } else if (!sharers.empty()) {
-    // Others have S or E copies: invalidate them
+    // then fetch from memory
     endTime = start + 100;
     traffic += blockSize;
     caches[cid]->getLine(allocIdx).state = M;
-    for (int other : sharers) {
-      Cache *c = caches[other];
-      int idx = c->findLine(blockId);
-      if (idx != -1) {
-        c->getLine(idx).state = I;
-        cores[cid]->stats.invalidations++;
-      }
-    }
-    cores[cid]->stats.dataTraffic += blockSize;
-  } else {
-    // No copies elsewhere: read from memory into M state
+  }
+  // 3) No other copies: simple memory fetch
+  else {
     endTime = start + 100;
     traffic += blockSize;
     caches[cid]->getLine(allocIdx).state = M;
-    cores[cid]->stats.dataTraffic += blockSize;
   }
 
   busNextFree = endTime;
   return endTime;
 }
+
 // BusUpgr implementation (for write hit in S: invalidate others)
 long long Bus::handleBusUpgr(int cid, uint32_t blockId,
                              long long requestTime, Core *cores[]) {
@@ -416,12 +412,11 @@ int main(int argc, char *argv[]) {
         }
         // Issue BusRd
         long long startTime = c->currentTime;
-        long long endTime = bus.handleBusRd(c->id, allocIdx, blockId,
-                                            startTime, allCores.data());
-        // Core was stalled waiting: count idle cycles (minus 1 for this instruction)
+        long long endTime = bus.handleBusRd(c->id, allocIdx, blockId, startTime, allCores.data());
+        // Core was stalled waiting: count idle cycles
         c->stats.idleCycles += (endTime - startTime);
-        // The memory operation itself does not count as core work beyond 1 cycle
-        c->stats.cycles += 1;  // finishing the read
+        // Only 1 cycle to complete the read instruction
+        c->stats.cycles += 1;
         c->currentTime = endTime;
         c->cache.touchLine(allocIdx);
       }
