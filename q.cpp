@@ -231,7 +231,7 @@ long long Bus::handleBusRdX(int cid, int allocIdx, uint32_t blockId,
     // FIX (MESI): M -> I on owner (invalidate its dirty copy)
     ownerCache->getLine(ownerIdx).state = I;
     cores[cid]->stats.invalidations++;  // FIX: Count invalidation as owner loses M copy
-    endTime += 2 * (blockSize / 4);     // send block to requester
+    endTime += 100 ;     // send block to requester
     traffic += blockSize;
     // Requestor gets M
     caches[cid]->getLine(allocIdx).state = M;
@@ -247,7 +247,7 @@ long long Bus::handleBusRdX(int cid, int allocIdx, uint32_t blockId,
     cores[cid]->stats.dataTraffic += blockSize;
   } else if (!sharers.empty()) {
     // Others have S or E copies: invalidate them
-    endTime = start + 2 * (blockSize / 4);
+    endTime = start + 100;
     traffic += blockSize;
     caches[cid]->getLine(allocIdx).state = M;
     for (int other : sharers) {
