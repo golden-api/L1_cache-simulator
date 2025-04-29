@@ -1,6 +1,6 @@
 #include <bits/stdc++.h>
 using namespace std;
-
+#define int uint32_t
 // **Enums for clarity in MESI states, operation types, and bus operations**
 enum MESIState { INVALID,
                  SHARED,
@@ -13,7 +13,7 @@ enum BusOp { BUS_RD,
 
 // **CacheLine Structure: Represents a single line in the cache**
 struct CacheLine {
-  uint32_t tag;     // Tag bits to identify the memory block
+  int tag;          // Tag bits to identify the memory block
   MESIState state;  // Current MESI state (INVALID, SHARED, EXCLUSIVE, MODIFIED)
   bool dirty;       // Dirty bit for write-back policy
   int lru_order;    // LRU order for replacement (0 = most recently used)
@@ -24,12 +24,12 @@ struct CacheLine {
 struct BusTransaction {
   int core_id;           // ID of the core issuing the transaction
   BusOp op;              // Type of bus operation (BUS_RD or BUS_RDX)
-  uint32_t address;      // Original memory address
-  uint32_t block_addr;   // Block-aligned address
+  int address;           // Original memory address
+  int block_addr;        // Block-aligned address
   bool needs_writeback;  // True if evicting a dirty block
   bool found_in_other;   // True if block was found in another cache
   BusTransaction() : core_id(-1), op(BUS_RD), address(0), block_addr(0), needs_writeback(false), found_in_other(false) {}
-  BusTransaction(int id, BusOp o, uint32_t addr, uint32_t baddr, bool wb = false)
+  BusTransaction(int id, BusOp o, int addr, int baddr, bool wb = false)
       : core_id(id), op(o), address(addr), block_addr(baddr), needs_writeback(wb), found_in_other(false) {}
 };
 
@@ -80,12 +80,12 @@ class Cache {
   }
 
   // **Access cache: Handle read/write operations with independent case handling**
-  bool access(uint32_t address, OpType op, bool& needs_bus, BusOp& bus_op, uint32_t& block_addr, bool& needs_writeback) {
+  bool access(int address, OpType op, bool& needs_bus, BusOp& bus_op, int& block_addr, bool& needs_writeback) {
     access_count++;
 
     // Decode index & tag
-    uint32_t set_index = (address >> block_offset_bits) & ((1u << set_index_bits) - 1);
-    uint32_t tag = address >> (block_offset_bits + set_index_bits);
+    int set_index = (address >> block_offset_bits) & ((1u << set_index_bits) - 1);
+    int tag = address >> (block_offset_bits + set_index_bits);
     block_addr = address & ~((1u << block_offset_bits) - 1);
 
     // 1) Search for a hit
@@ -156,8 +156,8 @@ class Cache {
 
   // **Snoop: Handle bus transactions from other caches**
   bool snoop(const BusTransaction& trans) {
-    uint32_t set_index = (trans.block_addr >> block_offset_bits) & ((1 << set_index_bits) - 1);
-    uint32_t tag = trans.block_addr >> (block_offset_bits + set_index_bits);
+    int set_index = (trans.block_addr >> block_offset_bits) & ((1 << set_index_bits) - 1);
+    int tag = trans.block_addr >> (block_offset_bits + set_index_bits);
 
     for (auto& line : cache_array[set_index]) {
       if (line.state != INVALID && line.tag == tag) {
@@ -175,6 +175,7 @@ class Cache {
           if (line.state == MODIFIED) {
             writeback_count++;
           }
+          eviction_count++;
           line.state = INVALID;
           return true;
         }
@@ -186,8 +187,8 @@ class Cache {
 
   // **Update cache state after bus transaction**
   void update_after_bus(const BusTransaction& trans) {
-    uint32_t set_index = (trans.block_addr >> block_offset_bits) & ((1 << set_index_bits) - 1);
-    uint32_t tag = trans.block_addr >> (block_offset_bits + set_index_bits);
+    int set_index = (trans.block_addr >> block_offset_bits) & ((1 << set_index_bits) - 1);
+    int tag = trans.block_addr >> (block_offset_bits + set_index_bits);
     bool found = false;
     for (int i = 0; i < associativity; i++) {
       CacheLine& line = cache_array[set_index][i];
@@ -243,18 +244,18 @@ class Cache {
   }
 
   // **Check if cache has a block**
-  bool has_block(uint32_t block_addr) const {
-    uint32_t set_index = (block_addr >> block_offset_bits) & ((1 << set_index_bits) - 1);
-    uint32_t tag = block_addr >> (block_offset_bits + set_index_bits);
+  bool has_block(int block_addr) const {
+    int set_index = (block_addr >> block_offset_bits) & ((1 << set_index_bits) - 1);
+    int tag = block_addr >> (block_offset_bits + set_index_bits);
     for (const auto& line : cache_array[set_index]) {
       if (line.state != INVALID && line.tag == tag) return true;
     }
     return false;
   }
-  MESIState get_line_state(uint32_t block_addr) const {
+  MESIState get_line_state(int block_addr) const {
     // decode set index and tag
-    uint32_t set_index = (block_addr >> block_offset_bits) & ((1u << set_index_bits) - 1);
-    uint32_t tag = block_addr >> (block_offset_bits + set_index_bits);
+    int set_index = (block_addr >> block_offset_bits) & ((1u << set_index_bits) - 1);
+    int tag = block_addr >> (block_offset_bits + set_index_bits);
 
     // scan all ways in the set
     for (const auto& line : cache_array[set_index]) {
@@ -286,8 +287,8 @@ class Bus {
   mt19937 rng;            // Random number generator for shuffling
 
  public:
-  unordered_set<uint32_t> pending_read_blocks;      // blocks with an outstanding BUS_RD
-  unordered_map<uint32_t, vector<int>> rd_waiters;  // cores waiting on each block  vector<BusTransaction> cycle_transactions;  // Transactions collected in current cycle
+  unordered_set<int> pending_read_blocks;      // blocks with an outstanding BUS_RD
+  unordered_map<int, vector<int>> rd_waiters;  // cores waiting on each block  vector<BusTransaction> cycle_transactions;  // Transactions collected in current cycle
 
   Bus() : remaining_cycles(0), invalidations(0), data_traffic(0), current_transaction() {
     random_device rd;
@@ -324,7 +325,7 @@ class Bus {
     current_transaction = pending.front();
     pending.pop_front();
 
-    uint32_t block = current_transaction.block_addr;
+    int block = current_transaction.block_addr;
     bool found = false;
     bool foundM = false;
     // Scan all other caches for a copy, and note if any is MODIFIED
@@ -425,12 +426,12 @@ class Core {
     getline(trace_file, line);
     istringstream iss(line);
     char op_char;
-    uint32_t addr;
+    int addr;
     iss >> op_char >> hex >> addr;
     OpType op_type = (op_char == 'R') ? READ : WRITE;
     bool needs_bus;
     BusOp bus_op;
-    uint32_t block_addr;
+    int block_addr;
     bool needs_writeback = false;
     bool hit = cache->access(addr, op_type, needs_bus, bus_op, block_addr, needs_writeback);
     if (!hit || needs_bus) {
@@ -660,3 +661,5 @@ int main(int argc, char* argv[]) {
   sim.write_output();
   return 0;
 }
+// 5142222685
+// info care digital system 373 2nd floor sant nagar east of kailash new delhi
