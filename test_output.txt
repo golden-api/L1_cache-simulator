@@ -1,50 +1,50 @@
 Core 0:
-  Total instructions: 1
-  Total reads: 1
-  Total writes: 0
-  Total cycles: 1
-  Idle cycles: 100
-  Misses: 1
-  Miss rate: 100.00%
-  Evictions: 0
-  Writebacks: 0
-  Invalidations: 0
-  Data traffic: 32 bytes
+  Total instructions: 2497349
+  Total reads: 1489888
+  Total writes: 1007461
+  Total cycles: 5113127
+  Idle cycles: 12474561
+  Misses: 35721
+  Miss rate: 1.43%
+  Evictions: 35536
+  Writebacks: 7171
+  Invalidations: 61
+  Data traffic: 1143072 bytes
 Core 1:
-  Total instructions: 1
-  Total reads: 1
-  Total writes: 0
-  Total cycles: 1
-  Idle cycles: 117
-  Misses: 1
-  Miss rate: 100.00%
-  Evictions: 0
-  Writebacks: 0
-  Invalidations: 0
-  Data traffic: 32 bytes
+  Total instructions: 2490468
+  Total reads: 1485857
+  Total writes: 1004611
+  Total cycles: 4932629
+  Idle cycles: 12361167
+  Misses: 35198
+  Miss rate: 1.41%
+  Evictions: 35011
+  Writebacks: 6780
+  Invalidations: 36
+  Data traffic: 1126336 bytes
 Core 2:
-  Total instructions: 1
-  Total reads: 1
-  Total writes: 0
-  Total cycles: 1
-  Idle cycles: 134
-  Misses: 1
-  Miss rate: 100.00%
-  Evictions: 0
-  Writebacks: 0
-  Invalidations: 0
-  Data traffic: 32 bytes
+  Total instructions: 2509057
+  Total reads: 1492629
+  Total writes: 1016428
+  Total cycles: 6010283
+  Idle cycles: 12931957
+  Misses: 40702
+  Miss rate: 1.62%
+  Evictions: 40485
+  Writebacks: 10451
+  Invalidations: 119
+  Data traffic: 1302464 bytes
 Core 3:
-  Total instructions: 1
-  Total reads: 1
-  Total writes: 0
-  Total cycles: 1
-  Idle cycles: 151
-  Misses: 1
-  Miss rate: 100.00%
-  Evictions: 0
-  Writebacks: 0
-  Invalidations: 0
-  Data traffic: 32 bytes
-Bus transactions: 4
-Bus traffic: 128 bytes
+  Total instructions: 2503127
+  Total reads: 1493736
+  Total writes: 1009391
+  Total cycles: 5009579
+  Idle cycles: 12532423
+  Misses: 35886
+  Miss rate: 1.43%
+  Evictions: 35701
+  Writebacks: 7006
+  Invalidations: 46
+  Data traffic: 1148352 bytes
+Bus transactions: 178740
+Bus traffic: 5725280 bytes

@@ -35,20 +35,23 @@ class Cache {
     return -1;
   }
   // Allocate a line for blockId (evict LRU if needed)
-  int allocateLine(uint32_t blockId, bool &evictedDirty) {
-    // FIX: Compute set index from lower s bits of blockId
+  int allocateLine(uint32_t blockId, bool &evictedDirty, bool &lineEvicted) {
+    // Compute set index from lower s bits of blockId
     uint32_t setIdx = blockId & ((1 << setIndexBits) - 1);
     uint32_t tag = blockId >> setIndexBits;
-    // Look for an invalid line first
+    // Initialize flags
+    lineEvicted = false;
+    evictedDirty = false;
+    // Look for an invalid line first (no eviction needed)
     for (int i = 0; i < assoc; i++) {
       if (sets[setIdx][i].state == I) {
-        evictedDirty = false;
+        // Found empty line: allocate without eviction
         sets[setIdx][i].tag = tag;
         sets[setIdx][i].state = I;
         return setIdx * assoc + i;
       }
     }
-    // Evict LRU in this set
+    // Evict LRU in this set (true eviction)
     int lruIdx = 0;
     long long minUsed = sets[setIdx][0].lastUsed;
     for (int i = 1; i < assoc; i++) {
@@ -57,8 +60,10 @@ class Cache {
         lruIdx = i;
       }
     }
+    // Mark eviction happened
+    lineEvicted = true;
     evictedDirty = (sets[setIdx][lruIdx].state == M);
-    // FIX: Store correct tag (upper bits of blockId)
+    // Store new tag, state reset to Invalid until filled by bus transaction
     sets[setIdx][lruIdx].tag = tag;
     sets[setIdx][lruIdx].state = I;
     return setIdx * assoc + lruIdx;
@@ -169,9 +174,8 @@ long long Bus::handleBusRd(int cid, int allocIdx, uint32_t blockId,
     }
     cores[cid]->stats.dataTraffic += blockSize;
   } else if (!sharers.empty()) {
-    // --- CACHE-TO-CACHE TRANSFER: insert 1-cycle request overhead (§) ---
-    long long xferStart = start + 1;            // (§) bus request
-    endTime = xferStart + 2 * (blockSize / 4);  // 2 cycles/word × N words
+    // Some cores have S or E: just get from one of them
+    endTime = start + 2 * (blockSize / 4);
     traffic += blockSize;
     caches[cid]->getLine(allocIdx).state = S;
     for (int other : sharers) {
@@ -226,7 +230,8 @@ long long Bus::handleBusRdX(int cid, int allocIdx, uint32_t blockId,
     cores[ownerM]->stats.writebacks++;
     // FIX (MESI): M -> I on owner (invalidate its dirty copy)
     ownerCache->getLine(ownerIdx).state = I;
-    endTime += 2 * (blockSize / 4);  // send block to requester
+    cores[cid]->stats.invalidations++;  // FIX: Count invalidation as owner loses M copy
+    endTime += 2 * (blockSize / 4);     // send block to requester
     traffic += blockSize;
     // Requestor gets M
     caches[cid]->getLine(allocIdx).state = M;
@@ -265,7 +270,6 @@ long long Bus::handleBusRdX(int cid, int allocIdx, uint32_t blockId,
   busNextFree = endTime;
   return endTime;
 }
-
 // BusUpgr implementation (for write hit in S: invalidate others)
 long long Bus::handleBusUpgr(int cid, uint32_t blockId,
                              long long requestTime, Core *cores[]) {
@@ -390,11 +394,10 @@ int main(int argc, char *argv[]) {
         // Miss
         c->stats.misses++;
         bool evDirty = false;
-        // Check eviction
-        int allocIdx = c->cache.allocateLine(blockId, evDirty);
-        if (c->cache.getLine(allocIdx).state != I)
-          c->stats.evictions++;
-        // Handle dirty eviction writeback
+        bool evLine = false;
+        int allocIdx = c->cache.allocateLine(blockId, evDirty, evLine);
+        if (evLine) c->stats.evictions++;  // FIX: Count true eviction (replaced a valid block)
+        // Handle dirty eviction writeback if needed
         if (evDirty) {
           long long flushStart = max(c->currentTime, bus.busNextFree);
           long long flushWait = flushStart - c->currentTime;
@@ -404,7 +407,7 @@ int main(int argc, char *argv[]) {
             c->stats.cycles += flushWait;  // include as core time (exception)
           }
           long long flushEnd = flushStart + 100;
-          c->stats.cycles += 100;  // writing back takes 100 cycles&#8203;:contentReference[oaicite:5]{index=5}
+          c->stats.cycles += 100;  // writing back takes 100 cycles
           bus.transactions++;
           bus.traffic += blockSize;
           c->stats.writebacks++;
@@ -415,19 +418,11 @@ int main(int argc, char *argv[]) {
         long long startTime = c->currentTime;
         long long endTime = bus.handleBusRd(c->id, allocIdx, blockId,
                                             startTime, allCores.data());
-        long long latency = endTime - startTime;
-        // Determine if this was a cache-to-cache (latency==2N+1) or memory (latency==100)
-        if (latency > 100) {
-          // cache-to-cache: latency == 1 (request) + 2N
-          c->stats.idleCycles += latency;  // all cycles “waited” for data
-          c->stats.cycles += 1;            // 1 execution cycles
-        } else {
-          // memory fetch: latency == 100
-          c->stats.idleCycles += latency;  // 100 stall cycles
-          c->stats.cycles += 1;            // 1 execution cycle to use data
-        }
-        c->currentTime = endTime + (latency > 100 ? 1 : 0);
-        // c->currentTime = endTime + 1;
+        // Core was stalled waiting: count idle cycles (minus 1 for this instruction)
+        c->stats.idleCycles += (endTime - startTime);
+        // The memory operation itself does not count as core work beyond 1 cycle
+        c->stats.cycles += 1;  // finishing the read
+        c->currentTime = endTime;
         c->cache.touchLine(allocIdx);
       }
     } else if (label == 3) {  // Write
@@ -441,15 +436,16 @@ int main(int argc, char *argv[]) {
           c->currentTime += 1;
           c->cache.touchLine(idx);
         } else if (st == E) {
-          // Hit in E: upgrade to M, 1 cycle&#8203;:contentReference[oaicite:6]{index=6}
+          // Hit in E: upgrade to M, 1 cycle
           c->stats.cycles += 1;
           c->currentTime += 1;
           c->cache.getLine(idx).state = M;
           c->cache.touchLine(idx);
         } else if (st == S) {
-          // Hit in S: broadcast invalidate (BusUpgr) then upgrade to M&#8203;:contentReference[oaicite:7]{index=7}
+          // Hit in S: broadcast invalidate (BusUpgr) then upgrade to M
           long long startTime = c->currentTime;
-          long long endTime = bus.handleBusUpgr(c->id, blockId, startTime, allCores.data());
+          long long endTime = bus.handleBusUpgr(c->id, blockId, startTime,
+                                                allCores.data());
           if (endTime > startTime) {
             // Bus was busy with others
             c->stats.idleCycles += (endTime - startTime);
@@ -464,10 +460,10 @@ int main(int argc, char *argv[]) {
         // Write miss
         c->stats.misses++;
         bool evDirty = false;
-        int allocIdx = c->cache.allocateLine(blockId, evDirty);
-        if (c->cache.getLine(allocIdx).state != I)
-          c->stats.evictions++;
-        // Handle dirty eviction writeback
+        bool evLine = false;
+        int allocIdx = c->cache.allocateLine(blockId, evDirty, evLine);
+        if (evLine) c->stats.evictions++;  // FIX: Count true eviction (replaced a valid block)
+        // Handle dirty eviction writeback if needed
         if (evDirty) {
           long long flushStart = max(c->currentTime, bus.busNextFree);
           long long flushWait = flushStart - c->currentTime;
@@ -483,7 +479,7 @@ int main(int argc, char *argv[]) {
           bus.busNextFree = flushEnd;
           c->currentTime = flushEnd;
         }
-        // Issue BusRdX (RWITM): bring block and invalidate others&#8203;:contentReference[oaicite:8]{index=8}
+        // Issue BusRdX (RWITM): bring block and invalidate others
         long long startTime = c->currentTime;
         long long endTime = bus.handleBusRdX(c->id, allocIdx, blockId,
                                              startTime, allCores.data());
