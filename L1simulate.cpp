@@ -333,7 +333,6 @@ class Bus {
       if (caches[i]->has_block(block)) {
         found = true;
         // look up the line’s state
-        // (you’ll need a helper in Cache to return state for this block)
         MESIState st = caches[i]->get_line_state(block);
         if (st == MODIFIED) {
           foundM = true;
@@ -443,7 +442,7 @@ class Core {
   }
 
   void set_stalled(bool stalled) { is_stalled = stalled; }
-  void increment_idle_cycles() { idle_cycles++; }
+  void increment_idle_cycles() { idle_cycles++, total_cycles++; }
   int get_id() const { return id; }
   int get_instruction_count() const { return instruction_count; }
   uint64_t get_total_cycles() const { return total_cycles; }
@@ -540,16 +539,24 @@ class Simulator {
 
       // Process each core
       for (auto& core : cores) {
-        if (core->get_is_stalled()) {
-          // Core is waiting on a bus transaction → count as idle
-          core->increment_idle_cycles();
-          core->increment_total_cycles();
-        } else if (core->has_next_instruction()) {
-          // Core is free and has work → count as active and execute
+        int cid = core->get_id();
+
+        // Case 1: core is actively processing
+        if (!core->get_is_stalled() && core->has_next_instruction()) {
           core->increment_total_cycles();
           core->process_instruction(bus);
         }
-        // else: core has finished its trace and is not stalled → do nothing
+        // Case 2: core is stalled
+        else if (core->get_is_stalled()) {
+          // Only increment idle_cycles if this core is *not* the one owning the bus
+          if (!bus->is_busy() || cid != bus->get_current_transaction().core_id) {
+            core->increment_idle_cycles();
+          } else {
+            core->increment_total_cycles();
+          }
+        }
+        // Case 3: core finished its trace
+        // Do nothing
       }
 
       // Commit transactions for this cycle
