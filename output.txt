@@ -3,7 +3,7 @@ Instructions: 2
 Total Cycles: 102:
 Idle Cycles: 0
 Miss Rate: 0.5000
-Evictions: 1
+Evictions: 0
 Writebacks: 1
 Core 1:
 Instructions: 1

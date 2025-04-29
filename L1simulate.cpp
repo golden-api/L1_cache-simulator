@@ -46,6 +46,7 @@ class Cache {
   int access_count;                       // Total number of cache accesses
   int eviction_count;                     // Number of evictions
   int writeback_count;                    // Number of writebacks to memory
+  int invalidations_count;                // Number of invalidations
 
   // **Update LRU order: Set accessed line to MRU (0)**
   void update_lru(int set_index, int way) {
@@ -88,53 +89,36 @@ class Cache {
     int tag = address >> (block_offset_bits + set_index_bits);
     block_addr = address & ~((1u << block_offset_bits) - 1);
 
-    // 1) Search for a hit
+    // Search for a hit
     for (int way = 0; way < associativity; way++) {
       CacheLine& line = cache_array[set_index][way];
       if (line.state != INVALID && line.tag == tag) {
-        // Hit — update LRU
         update_lru(set_index, way);
-
         if (op == READ) {
-          // --- Read hit: nothing on bus, no state change
           needs_bus = false;
           return true;
         }
-
-        // --- WRITE hit: dispatch based on current MESI state
         switch (line.state) {
           case MODIFIED:
-            // (M) already exclusive & dirty
-            // Just update the value locally
             line.dirty = true;
             needs_bus = false;
             return true;
-
           case EXCLUSIVE:
-            // (E) clean exclusive
-            // Upgrade to Modified, mark dirty
             line.state = MODIFIED;
             line.dirty = true;
             needs_bus = false;
             return true;
-
           case SHARED:
-            // (S) must invalidate all other copies
-            // Broadcast BusRdX (RWITM) → other caches will snoop and go I
             needs_bus = true;
             bus_op = BUS_RDX;
-            // leave state change & dirty bit to update_after_bus()
             return true;
-
           default:
-            // INVALID should never match here
-            break;
+            assert(false);
         }
       }
     }
 
-    // 2) MISS handling (read or write) stays the same as before...
-    //    (install deferred until update_after_bus)
+    // Miss handling
     miss_count++;
     needs_bus = true;
     bus_op = (op == READ ? BUS_RD : BUS_RDX);
@@ -150,7 +134,6 @@ class Cache {
       }
     }
 
-    // **Do not install a new line here** — update_after_bus() will allocate.
     return false;
   }
 
@@ -162,29 +145,27 @@ class Cache {
     for (auto& line : cache_array[set_index]) {
       if (line.state != INVALID && line.tag == tag) {
         if (trans.op == BUS_RD) {
-          // Any E or M downgrades to SHARED
           if (line.state == EXCLUSIVE || line.state == MODIFIED) {
             if (line.state == MODIFIED) {
-              // Write back the dirty data before sharing
               writeback_count++;
             }
             line.state = SHARED;
           }
         } else if (trans.op == BUS_RDX) {
-          // Invalidate on a read-with-intent-to-modify
-          if (line.state == MODIFIED) {
-            writeback_count++;
+          if (line.state != INVALID) {
+            if (line.state == MODIFIED) {
+              writeback_count++;
+            }
+            line.state = INVALID;
+            invalidations_count++;
+            return true;
           }
-          eviction_count++;
-          line.state = INVALID;
-          return true;
         }
         break;
       }
     }
     return false;
   }
-
   // **Update cache state after bus transaction**
   void update_after_bus(const BusTransaction& trans) {
     int set_index = (trans.block_addr >> block_offset_bits) & ((1 << set_index_bits) - 1);
@@ -196,13 +177,9 @@ class Cache {
         found = true;
         if (trans.op == BUS_RD) {
           line.state = trans.found_in_other ? SHARED : EXCLUSIVE;
-          // cout << "Update after BUS_RD at block 0x" << hex << trans.block_addr << dec
-          //      << ": state set to " << (trans.found_in_other ? "SHARED" : "EXCLUSIVE") << endl;
         } else if (trans.op == BUS_RDX) {
           line.state = MODIFIED;
           line.dirty = true;
-          // cout << "Update after BUS_RDX at block 0x" << hex << trans.block_addr << dec
-          //      << ": state set to MODIFIED" << endl;
         }
         update_lru(set_index, i);
         break;
@@ -223,7 +200,6 @@ class Cache {
           eviction_count++;
           if (victim.state == MODIFIED) {
             writeback_count++;
-            // cout << "Evicting MODIFIED line during update_after_bus, writeback required" << endl;
           }
         }
       }
@@ -231,18 +207,13 @@ class Cache {
       line.tag = tag;
       if (trans.op == BUS_RD) {
         line.state = trans.found_in_other ? SHARED : EXCLUSIVE;
-        // cout << "Allocate after BUS_RD at block 0x" << hex << trans.block_addr << dec
-        //      << ": state set to " << (trans.found_in_other ? "SHARED" : "EXCLUSIVE") << endl;
       } else if (trans.op == BUS_RDX) {
         line.state = MODIFIED;
         line.dirty = true;
-        // cout << "Allocate after BUS_RDX at block 0x" << hex << trans.block_addr << dec
-        //      << ": state set to MODIFIED" << endl;
       }
       update_lru(set_index, way);
     }
   }
-
   // **Check if cache has a block**
   bool has_block(int block_addr) const {
     int set_index = (block_addr >> block_offset_bits) & ((1 << set_index_bits) - 1);
@@ -649,7 +620,7 @@ Args parse_args(int argc, char* argv[]) {
   return args;
 }
 
-int main(int argc, char* argv[]) {
+signed main(signed argc, char* argv[]) {
   Args args = parse_args(argc, argv);
   if (args.show_help || args.app_name.empty() || args.set_index_bits <= 0 ||
       args.assoc <= 0 || args.block_offset_bits <= 0 || args.output_file.empty()) {
