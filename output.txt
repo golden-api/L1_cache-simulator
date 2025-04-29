@@ -1,68 +1,50 @@
-Simulation Parameters:
-Trace Prefix: app3
-Set Index Bits: 7
-Associativity: 2
-Block Bits: 5
-Block Size (Bytes): 32
-Number of Sets: 128
-Cache Size (KB per core): 8
-MESI Protocol: Enabled
-Write Policy: Write-back, Write-allocate
-Replacement Policy: LRU
-Bus: Central snooping bus
-
-Core 0 Statistics:
-Total Instructions: 1
-Total Reads: 0
-Total Writes: 1
-Total Execution Cycles: 102
-Idle Cycles: 0
-Cache Misses: 1
-Cache Miss Rate: 100.00%
-Cache Evictions: 0
-Writebacks: 1
-Bus Invalidations: 1
-Data Traffic (Bytes): 32
-
-Core 1 Statistics:
-Total Instructions: 2
-Total Reads: 1
-Total Writes: 1
-Total Execution Cycles: 320
-Idle Cycles: 101
-Cache Misses: 1
-Cache Miss Rate: 50.00%
-Cache Evictions: 0
-Writebacks: 0
-Bus Invalidations: 0
-Data Traffic (Bytes): 32
-
-Core 2 Statistics:
-Total Instructions: 0
-Total Reads: 0
-Total Writes: 0
-Total Execution Cycles: 0
-Idle Cycles: 0
-Cache Misses: 0
-Cache Miss Rate: nan%
-Cache Evictions: 0
-Writebacks: 0
-Bus Invalidations: 0
-Data Traffic (Bytes): 32
-
-Core 3 Statistics:
-Total Instructions: 0
-Total Reads: 0
-Total Writes: 0
-Total Execution Cycles: 0
-Idle Cycles: 0
-Cache Misses: 0
-Cache Miss Rate: nan%
-Cache Evictions: 0
-Writebacks: 0
-Bus Invalidations: 0
-Data Traffic (Bytes): 32
-
-Overall Bus Summary:
-Total Bus Transactions: 3
-Total Bus Traffic (Bytes): 96
+Core 0:
+  Total instructions: 2
+  Total reads: 2
+  Total writes: 0
+  Total cycles: 2
+  Idle cycles: 100
+  Misses: 1
+  Miss rate: 50.00%
+  Evictions: 0
+  Writebacks: 0
+  Invalidations: 0
+  Data traffic: 32 bytes
+Core 1:
+  Total instructions: 2
+  Total reads: 2
+  Total writes: 0
+  Total cycles: 1
+  Idle cycles: 117
+  Misses: 1
+  Miss rate: 50.00%
+  Evictions: 0
+  Writebacks: 0
+  Invalidations: 0
+  Data traffic: 32 bytes
+Core 2:
+  Total instructions: 2
+  Total reads: 2
+  Total writes: 0
+  Total cycles: 1
+  Idle cycles: 134
+  Misses: 1
+  Miss rate: 50.00%
+  Evictions: 0
+  Writebacks: 0
+  Invalidations: 0
+  Data traffic: 32 bytes
+Core 3:
+  Total instructions: 2
+  Total reads: 2
+  Total writes: 0
+  Total cycles: 1
+  Idle cycles: 151
+  Misses: 1
+  Miss rate: 50.00%
+  Evictions: 0
+  Writebacks: 0
+  Invalidations: 0
+  Data traffic: 32 bytes
+Bus transactions: 4
+Bus traffic: 128 bytes

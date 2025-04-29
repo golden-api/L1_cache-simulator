@@ -1,50 +1,50 @@
 Core 0:
-  Total instructions: 2497349
-  Total reads: 1489888
-  Total writes: 1007461
-  Total cycles: 5088130
-  Idle cycles: 12501739
-  Misses: 35727
-  Miss rate: 1.43%
-  Evictions: 35537
-  Writebacks: 7179
-  Invalidations: 67
-  Data traffic: 975744 bytes
+  Total instructions: 3270132
+  Total reads: 2380720
+  Total writes: 889412
+  Total cycles: 10733682
+  Idle cycles: 50774658
+  Misses: 184443
+  Miss rate: 5.64%
+  Evictions: 183486
+  Writebacks: 26519
+  Invalidations: 730
+  Data traffic: 5313632 bytes
 Core 1:
-  Total instructions: 2490468
-  Total reads: 1485857
-  Total writes: 1004611
-  Total cycles: 4929322
-  Idle cycles: 12397263
-  Misses: 35215
-  Miss rate: 1.41%
-  Evictions: 35011
-  Writebacks: 6784
-  Invalidations: 41
-  Data traffic: 967328 bytes
+  Total instructions: 3287252
+  Total reads: 2388005
+  Total writes: 899247
+  Total cycles: 11556983
+  Idle cycles: 50559600
+  Misses: 184019
+  Miss rate: 5.60%
+  Evictions: 183594
+  Writebacks: 27609
+  Invalidations: 361
+  Data traffic: 5255008 bytes
 Core 2:
-  Total instructions: 2509057
-  Total reads: 1492629
-  Total writes: 1016428
-  Total cycles: 6029873
-  Idle cycles: 12946452
-  Misses: 40707
-  Miss rate: 1.62%
-  Evictions: 40486
-  Writebacks: 10462
-  Invalidations: 130
-  Data traffic: 1048320 bytes
+  Total instructions: 117698
+  Total reads: 74523
+  Total writes: 43175
+  Total cycles: 1205925
+  Idle cycles: 3024480
+  Misses: 8258
+  Miss rate: 7.02%
+  Evictions: 8117
+  Writebacks: 2837
+  Invalidations: 37
+  Data traffic: 205280 bytes
 Core 3:
-  Total instructions: 2503127
-  Total reads: 1493736
-  Total writes: 1009391
-  Total cycles: 5019880
-  Idle cycles: 12549273
-  Misses: 35877
-  Miss rate: 1.43%
-  Evictions: 35701
-  Writebacks: 7002
-  Invalidations: 41
-  Data traffic: 985888 bytes
-Bus transactions: 178765
-Bus traffic: 5726496 bytes
+  Total instructions: 3324919
+  Total reads: 2416052
+  Total writes: 908867
+  Total cycles: 11193607
+  Idle cycles: 50759644
+  Misses: 185186
+  Miss rate: 5.57%
+  Evictions: 184289
+  Writebacks: 26011
+  Invalidations: 791
+  Data traffic: 5349728 bytes
+Bus transactions: 644420
+Bus traffic: 20636224 bytes
