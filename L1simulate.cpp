@@ -356,7 +356,7 @@ class Bus {
       }
     } else {  // BUS_RDX (write-miss) – unchanged from before
       if (found) {
-        remaining_cycles = 100 + 100;
+        remaining_cycles = 100 + (foundM ? 100 : 0);
       } else {
         remaining_cycles = 100;
       }
