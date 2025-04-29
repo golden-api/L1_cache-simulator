@@ -1,31 +1,39 @@
 Core 0:
 Instructions: 2
-Total Cycles: 102:
+Total Cycles: 202
 Idle Cycles: 0
+Bus Cycles: 100
 Miss Rate: 0.5000
 Evictions: 0
 Writebacks: 1
+Invalidations: 1
 Core 1:
 Instructions: 1
-Total Cycles: 201:
+Total Cycles: 302
 Idle Cycles: 100
+Bus Cycles: 100
 Miss Rate: 1.0000
 Evictions: 0
 Writebacks: 0
+Invalidations: 0
 Core 2:
 Instructions: 0
-Total Cycles: 0:
+Total Cycles: 0
 Idle Cycles: 0
+Bus Cycles: 0
 Miss Rate: 0.0000
 Evictions: 0
 Writebacks: 0
+Invalidations: 0
 Core 3:
 Instructions: 0
-Total Cycles: 0:
+Total Cycles: 0
 Idle Cycles: 0
+Bus Cycles: 0
 Miss Rate: 0.0000
 Evictions: 0
 Writebacks: 0
+Invalidations: 0
 System:
 Invalidations: 1
 Bus Traffic: 128 bytes

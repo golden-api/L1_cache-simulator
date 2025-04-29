@@ -1,54 +1,58 @@
 #include <bits/stdc++.h>
 using namespace std;
 #define int uint32_t
-// **Enums for clarity in MESI states, operation types, and bus operations**
+
+// Enums for clarity in MESI states, operation types, and bus operations
 enum MESIState { INVALID,
                  SHARED,
                  EXCLUSIVE,
-                 MODIFIED };  // MESI protocol states
+                 MODIFIED };
 enum OpType { READ,
-              WRITE };  // Types of memory operations
+              WRITE };
 enum BusOp { BUS_RD,
-             BUS_RDX };  // Bus operations: read (BusRd), read-exclusive (BusRdX)
+             BUS_RDX };
 
-// **CacheLine Structure: Represents a single line in the cache**
+// CacheLine Structure: Represents a single line in the cache
 struct CacheLine {
-  int tag;          // Tag bits to identify the memory block
-  MESIState state;  // Current MESI state (INVALID, SHARED, EXCLUSIVE, MODIFIED)
-  bool dirty;       // Dirty bit for write-back policy
-  int lru_order;    // LRU order for replacement (0 = most recently used)
+  int tag;
+  MESIState state;
+  bool dirty;
+  int lru_order;
   CacheLine() : tag(0), state(INVALID), dirty(false), lru_order(0) {}
 };
 
-// **BusTransaction Structure: Represents a transaction on the bus**
+// BusTransaction Structure: Represents a transaction on the bus
 struct BusTransaction {
-  int core_id;           // ID of the core issuing the transaction
-  BusOp op;              // Type of bus operation (BUS_RD or BUS_RDX)
-  int address;           // Original memory address
-  int block_addr;        // Block-aligned address
-  bool needs_writeback;  // True if evicting a dirty block
-  bool found_in_other;   // True if block was found in another cache
-  BusTransaction() : core_id(-1), op(BUS_RD), address(0), block_addr(0), needs_writeback(false), found_in_other(false) {}
+  int core_id;      // Requestor core ID
+  int receptor_id;  // Receptor core ID (core with Modified line), -1 if none
+  BusOp op;
+  int address;
+  int block_addr;
+  bool needs_writeback;
+  bool found_in_other;
+  BusTransaction() : core_id(-1), receptor_id(-1), op(BUS_RD), address(0), block_addr(0), needs_writeback(false), found_in_other(false) {}
   BusTransaction(int id, BusOp o, int addr, int baddr, bool wb = false)
-      : core_id(id), op(o), address(addr), block_addr(baddr), needs_writeback(wb), found_in_other(false) {}
+      : core_id(id), receptor_id(-1), op(o), address(addr), block_addr(baddr), needs_writeback(wb), found_in_other(false) {}
 };
 
-// **Cache Class: Manages an L1 cache for one core**
+// Forward declaration of Core class
+class Core;
+
+// Cache Class: Manages an L1 cache for one core
 class Cache {
  private:
-  int num_sets;                           // Number of sets (S = 2^s)
-  int associativity;                      // Number of ways (E)
-  int block_size;                         // Block size in bytes (B = 2^b)
-  int set_index_bits;                     // Number of set index bits (s)
-  int block_offset_bits;                  // Number of block offset bits (b)
-  vector<vector<CacheLine>> cache_array;  // 2D array: num_sets x associativity
-  int miss_count;                         // Number of cache misses
-  int access_count;                       // Total number of cache accesses
-  int eviction_count;                     // Number of evictions
-  int writeback_count;                    // Number of writebacks to memory
-  int invalidations_count;                // Number of invalidations
+  int num_sets;
+  int associativity;
+  int block_size;
+  int set_index_bits;
+  int block_offset_bits;
+  vector<vector<CacheLine>> cache_array;
+  int access_count;
+  int miss_count;
+  int eviction_count;
+  int writeback_count;
+  int invalidation_count;  // Tracks coherence invalidations
 
-  // **Update LRU order: Set accessed line to MRU (0)**
   void update_lru(int set_index, int way) {
     for (int i = 0; i < associativity; i++) {
       if (cache_array[set_index][i].state != INVALID) {
@@ -58,7 +62,6 @@ class Cache {
     cache_array[set_index][way].lru_order = 0;
   }
 
-  // **Find LRU victim for replacement**
   int find_lru_victim(int set_index) {
     int max_lru = -1;
     int victim = 0;
@@ -77,19 +80,16 @@ class Cache {
     num_sets = 1 << s;
     block_size = 1 << b;
     cache_array.resize(num_sets, vector<CacheLine>(associativity));
-    miss_count = access_count = eviction_count = writeback_count = 0;
+    access_count = miss_count = eviction_count = writeback_count = invalidation_count = 0;
   }
 
-  // **Access cache: Handle read/write operations with independent case handling**
   bool access(int address, OpType op, bool& needs_bus, BusOp& bus_op, int& block_addr, bool& needs_writeback) {
     access_count++;
 
-    // Decode index & tag
     int set_index = (address >> block_offset_bits) & ((1u << set_index_bits) - 1);
     int tag = address >> (block_offset_bits + set_index_bits);
     block_addr = address & ~((1u << block_offset_bits) - 1);
 
-    // Search for a hit
     for (int way = 0; way < associativity; way++) {
       CacheLine& line = cache_array[set_index][way];
       if (line.state != INVALID && line.tag == tag) {
@@ -113,12 +113,11 @@ class Cache {
             bus_op = BUS_RDX;
             return true;
           default:
-            assert(false);
+            break;
         }
       }
     }
 
-    // Miss handling
     miss_count++;
     needs_bus = true;
     bus_op = (op == READ ? BUS_RD : BUS_RDX);
@@ -137,7 +136,6 @@ class Cache {
     return false;
   }
 
-  // **Snoop: Handle bus transactions from other caches**
   bool snoop(const BusTransaction& trans) {
     int set_index = (trans.block_addr >> block_offset_bits) & ((1 << set_index_bits) - 1);
     int tag = trans.block_addr >> (block_offset_bits + set_index_bits);
@@ -157,7 +155,7 @@ class Cache {
               writeback_count++;
             }
             line.state = INVALID;
-            invalidations_count++;
+            invalidation_count++;
             return true;
           }
         }
@@ -166,7 +164,7 @@ class Cache {
     }
     return false;
   }
-  // **Update cache state after bus transaction**
+
   void update_after_bus(const BusTransaction& trans) {
     int set_index = (trans.block_addr >> block_offset_bits) & ((1 << set_index_bits) - 1);
     int tag = trans.block_addr >> (block_offset_bits + set_index_bits);
@@ -214,7 +212,7 @@ class Cache {
       update_lru(set_index, way);
     }
   }
-  // **Check if cache has a block**
+
   bool has_block(int block_addr) const {
     int set_index = (block_addr >> block_offset_bits) & ((1 << set_index_bits) - 1);
     int tag = block_addr >> (block_offset_bits + set_index_bits);
@@ -223,19 +221,15 @@ class Cache {
     }
     return false;
   }
-  MESIState get_line_state(int block_addr) const {
-    // decode set index and tag
-    int set_index = (block_addr >> block_offset_bits) & ((1u << set_index_bits) - 1);
-    int tag = block_addr >> (block_offset_bits + set_index_bits);
 
-    // scan all ways in the set
+  MESIState get_line_state(int block_addr) const {
+    int set_index = (block_addr >> block_offset_bits) & ((1 << set_index_bits) - 1);
+    int tag = block_addr >> (block_offset_bits + set_index_bits);
     for (const auto& line : cache_array[set_index]) {
       if (line.state != INVALID && line.tag == tag) {
         return line.state;
       }
     }
-
-    // not found
     return INVALID;
   }
 
@@ -243,55 +237,50 @@ class Cache {
   int get_access_count() const { return access_count; }
   int get_eviction_count() const { return eviction_count; }
   int get_writeback_count() const { return writeback_count; }
+  int get_invalidation_count() const { return invalidation_count; }
   int get_block_size() const { return block_size; }
 };
 
-// **Bus Class: Manages bus transactions with randomized order**
+// Bus Class: Manages bus transactions with separate cycle attribution
 class Bus {
  private:
-  BusTransaction current_transaction;  // Current active transaction
-  int remaining_cycles;                // Cycles left for current transaction
-  deque<BusTransaction> pending;       // queue of pending transactions
+  BusTransaction current_transaction;
+  int remaining_cycles;
+  deque<BusTransaction> pending;
   vector<BusTransaction> cycle_transactions;
-  int invalidations;      // Total number of invalidations
-  uint64_t data_traffic;  // Total bus traffic in bytes
-  mt19937 rng;            // Random number generator for shuffling
+  int invalidations;
+  uint64_t data_traffic;
+  mt19937 rng;
 
  public:
-  unordered_set<int> pending_read_blocks;      // blocks with an outstanding BUS_RD
-  unordered_map<int, vector<int>> rd_waiters;  // cores waiting on each block  vector<BusTransaction> cycle_transactions;  // Transactions collected in current cycle
+  unordered_set<int> pending_read_blocks;
+  unordered_map<int, vector<int>> rd_waiters;
 
   Bus() : remaining_cycles(0), invalidations(0), data_traffic(0), current_transaction() {
     random_device rd;
     rng = mt19937(rd());
   }
 
-  // **Collect transaction for the current cycle**
   void add_transaction(const BusTransaction& t) {
     if (t.op == BUS_RD) {
-      // If a read to this block is already pending, register the core as a waiter
       auto block = t.block_addr;
       if (pending_read_blocks.count(block)) {
         rd_waiters[block].push_back(t.core_id);
-        return;  // skip enqueue
+        return;
       }
-      // First read for this block: mark it and enqueue
       pending_read_blocks.insert(block);
     }
-    // Collect for this cycle
     cycle_transactions.push_back(t);
   }
 
-  // **Randomize and queue transactions collected in the current cycle**
   void commit_transactions() {
     for (auto& t : cycle_transactions) {
-      pending.push_back(t);  // now using deque
+      pending.push_back(t);
     }
     cycle_transactions.clear();
   }
 
-  // **Start the next transaction**
-  void start_next_transaction(const std::vector<Cache*>& caches) {
+  void start_next_transaction(const vector<Cache*>& caches) {
     if (pending.empty()) return;
     current_transaction = pending.front();
     pending.pop_front();
@@ -299,38 +288,40 @@ class Bus {
     int block = current_transaction.block_addr;
     bool found = false;
     bool foundM = false;
-    // Scan all other caches for a copy, and note if any is MODIFIED
+    int receptor_id = -1;
     for (int i = 0; i < (int)caches.size(); i++) {
       if (i == current_transaction.core_id) continue;
       if (caches[i]->has_block(block)) {
         found = true;
-        // look up the line’s state
         MESIState st = caches[i]->get_line_state(block);
         if (st == MODIFIED) {
           foundM = true;
-          break;  // a modified copy dominates
+          receptor_id = i;
+          break;
         }
       }
     }
     current_transaction.found_in_other = found;
+    current_transaction.receptor_id = receptor_id;
 
     int block_size = caches[0]->get_block_size();
-    int N = block_size / 4;  // e.g. 64-byte block → N=16
+    int N = block_size / 4;
 
     if (current_transaction.op == BUS_RD) {
       if (!found) {
-        // (1) No other copies → memory fetch
         remaining_cycles = 100;
       } else {
-        // (2,3,4) Someone has it: abort memory, do cache-to-cache
-        // If it was MODIFIED, they must write back first (100 cycles)
-        remaining_cycles = (foundM ? 100 /* writeback of M */ : 0) + 2 * N;  // cache-to-cache transfer
+        remaining_cycles = (foundM ? 100 : 0) + 2 * N;
       }
-    } else {  // BUS_RDX (write-miss) – unchanged from before
+    } else if (current_transaction.op == BUS_RDX) {
       if (found) {
-        remaining_cycles = 100 + (foundM ? 100 : 0);
+        if (foundM) {
+          remaining_cycles = 201;  // 100 for writeback (receptor) + 101 for memory read (requestor)
+        } else {
+          remaining_cycles = 101;
+        }
       } else {
-        remaining_cycles = 100;
+        remaining_cycles = 101;
       }
       if (current_transaction.needs_writeback)
         remaining_cycles += 100;
@@ -339,19 +330,8 @@ class Bus {
     data_traffic += block_size;
   }
 
-  // **Process one cycle of the transaction**
-  bool process_cycle() {
-    if (remaining_cycles > 0) {
-      remaining_cycles--;
-      if (remaining_cycles == 0) {
-        // cout << "Bus transaction completed: core " << current_transaction.core_id
-        //      << ", op " << (current_transaction.op == BUS_RD ? "BUS_RD" : "BUS_RDX")
-        //      << ", address 0x" << hex << current_transaction.address << dec << endl;
-      }
-      return remaining_cycles == 0;
-    }
-    return false;
-  }
+  // Declare process_cycle; implementation moved after Core
+  bool process_cycle(vector<Core*>& cores);
 
   bool is_busy() const { return remaining_cycles > 0; }
   BusTransaction& get_current_transaction() { return current_transaction; }
@@ -362,7 +342,7 @@ class Bus {
   bool has_pending() const { return !pending.empty(); }
 };
 
-// **Core Class: Represents a processor core**
+// Core Class: Represents a processor core
 class Core {
  private:
   int id;
@@ -370,12 +350,13 @@ class Core {
   int instruction_count;
   uint64_t total_cycles;
   uint64_t idle_cycles;
+  uint64_t bus_cycles;
   Cache* cache;
   bool is_stalled;
 
  public:
   Core(int id, const string& trace_filename, int s, int E, int b)
-      : id(id), instruction_count(0), total_cycles(0), idle_cycles(0), is_stalled(false) {
+      : id(id), instruction_count(0), total_cycles(0), idle_cycles(0), bus_cycles(0), is_stalled(false) {
     cache = new Cache(s, E, b);
     trace_file.open(trace_filename);
     if (!trace_file.is_open()) {
@@ -391,7 +372,6 @@ class Core {
 
   bool has_next_instruction() { return trace_file.peek() != EOF; }
 
-  // **Process one instruction**
   void process_instruction(Bus* bus) {
     string line;
     getline(trace_file, line);
@@ -405,6 +385,7 @@ class Core {
     int block_addr;
     bool needs_writeback = false;
     bool hit = cache->access(addr, op_type, needs_bus, bus_op, block_addr, needs_writeback);
+    total_cycles++;
     if (!hit || needs_bus) {
       BusTransaction trans(id, bus_op, addr, block_addr, needs_writeback);
       bus->add_transaction(trans);
@@ -415,21 +396,48 @@ class Core {
 
   void set_stalled(bool stalled) { is_stalled = stalled; }
   void increment_idle_cycles() { idle_cycles++, total_cycles++; }
+  void increment_total_cycles() { total_cycles++; }
+  void increment_bus_cycles(int cycles) {
+    bus_cycles += cycles;
+    total_cycles += cycles;
+  }
   int get_id() const { return id; }
   int get_instruction_count() const { return instruction_count; }
   uint64_t get_total_cycles() const { return total_cycles; }
-  void increment_total_cycles() { total_cycles++; }
   uint64_t get_idle_cycles() const { return idle_cycles; }
+  uint64_t get_bus_cycles() const { return bus_cycles; }
   double get_miss_rate() const {
     return cache->get_access_count() > 0 ? static_cast<double>(cache->get_miss_count()) / cache->get_access_count() : 0.0;
   }
   int get_eviction_count() const { return cache->get_eviction_count(); }
   int get_writeback_count() const { return cache->get_writeback_count(); }
+  int get_invalidation_count() const { return cache->get_invalidation_count(); }
   Cache* get_cache() { return cache; }
   bool get_is_stalled() const { return is_stalled; }
 };
 
-// **Simulator Class: Orchestrates the simulation**
+// Implementation of Bus::process_cycle (moved after Core)
+bool Bus::process_cycle(vector<Core*>& cores) {
+  if (remaining_cycles > 0) {
+    remaining_cycles--;
+    if (remaining_cycles == 0) {
+      cout << "Bus transaction completed: core " << current_transaction.core_id
+           << ", op " << (current_transaction.op == BUS_RD ? "BUS_RD" : "BUS_RDX")
+           << ", address 0x" << hex << current_transaction.address << dec << endl;
+      if (current_transaction.op == BUS_RDX && current_transaction.receptor_id != -1) {
+        cores[current_transaction.receptor_id]->increment_bus_cycles(100);
+        cores[current_transaction.core_id]->increment_bus_cycles(101);
+      } else {
+        cores[current_transaction.core_id]->increment_bus_cycles(
+            current_transaction.needs_writeback ? 200 : (current_transaction.found_in_other ? 100 : 100));
+      }
+    }
+    return remaining_cycles == 0;
+  }
+  return false;
+}
+
+// Simulator Class: Orchestrates the simulation
 class Simulator {
  private:
   vector<Core*> cores;
@@ -461,21 +469,17 @@ class Simulator {
     delete bus;
   }
 
-  // **Run the simulation**
   void run() {
     while (true) {
-      // Process bus transaction
       if (bus->is_busy()) {
-        if (bus->process_cycle()) {
+        if (bus->process_cycle(cores)) {
           auto& done = bus->get_current_transaction();
           auto block = done.block_addr;
 
           if (done.op == BUS_RD) {
-            // Wake initiator
             cores[done.core_id]->set_stalled(false);
             cores[done.core_id]->get_cache()->update_after_bus(done);
 
-            // Wake any additional waiters on this block
             auto it = bus->rd_waiters.find(block);
             if (it != bus->rd_waiters.end()) {
               for (int cid : it->second) {
@@ -485,56 +489,42 @@ class Simulator {
               bus->rd_waiters.erase(it);
             }
           } else {
-            // For BUS_RDX or other ops, handle as before
             cores[done.core_id]->set_stalled(false);
             cores[done.core_id]->get_cache()->update_after_bus(done);
           }
 
-          // Standard snoop/invalidation for all caches
           for (int i = 0; i < 4; i++) {
             if (i != done.core_id && cores[i]->get_cache()->snoop(done)) {
               bus->increment_invalidations();
             }
           }
 
-          // Remove the block from pending_read_blocks on completion
           if (done.op == BUS_RD) {
             bus->pending_read_blocks.erase(block);
           }
         }
       }
 
-      // Start next transaction if bus is idle
       if (!bus->is_busy() && bus->has_pending()) {
         bus->start_next_transaction(get_caches());
       }
 
-      // Process each core
       for (auto& core : cores) {
         int cid = core->get_id();
 
-        // Case 1: core is actively processing
         if (!core->get_is_stalled() && core->has_next_instruction()) {
-          core->increment_total_cycles();
           core->process_instruction(bus);
-        }
-        // Case 2: core is stalled
-        else if (core->get_is_stalled()) {
-          // Only increment idle_cycles if this core is *not* the one owning the bus
+        } else if (core->get_is_stalled()) {
           if (!bus->is_busy() || cid != bus->get_current_transaction().core_id) {
             core->increment_idle_cycles();
           } else {
             core->increment_total_cycles();
           }
         }
-        // Case 3: core finished its trace
-        // Do nothing
       }
 
-      // Commit transactions for this cycle
       bus->commit_transactions();
 
-      // Check if simulation is complete
       bool all_done = true;
       for (auto& core : cores) {
         if (core->has_next_instruction() || core->get_is_stalled()) {
@@ -548,17 +538,18 @@ class Simulator {
     }
   }
 
-  // **Write output to file**
   void write_output() {
     ofstream out(output_file);
     for (int i = 0; i < 4; i++) {
       out << "Core " << i << ":\n";
       out << "Instructions: " << cores[i]->get_instruction_count() << "\n";
-      out << "Total Cycles: " << cores[i]->get_total_cycles() << ":\n";
+      out << "Total Cycles: " << cores[i]->get_total_cycles() << "\n";
       out << "Idle Cycles: " << cores[i]->get_idle_cycles() << "\n";
+      out << "Bus Cycles: " << cores[i]->get_bus_cycles() << "\n";
       out << "Miss Rate: " << fixed << setprecision(4) << cores[i]->get_miss_rate() << "\n";
       out << "Evictions: " << cores[i]->get_eviction_count() << "\n";
       out << "Writebacks: " << cores[i]->get_writeback_count() << "\n";
+      out << "Invalidations: " << cores[i]->get_invalidation_count() << "\n";
     }
     out << "System:\n";
     out << "Invalidations: " << bus->get_invalidations() << "\n";
@@ -567,7 +558,7 @@ class Simulator {
   }
 };
 
-// **Command-line argument parsing**
+// Command-line argument parsing
 struct Args {
   string app_name;
   int set_index_bits;
@@ -632,5 +623,3 @@ signed main(signed argc, char* argv[]) {
   sim.write_output();
   return 0;
 }
-// 5142222685
-// info care digital system 373 2nd floor sant nagar east of kailash new delhi
