@@ -174,9 +174,8 @@ long long Bus::handleBusRd(int cid, int allocIdx, uint32_t blockId,
     }
     cores[cid]->stats.dataTraffic += blockSize;
   } else if (!sharers.empty()) {
-    // --- CACHE-TO-CACHE TRANSFER: insert 1-cycle request overhead (§) ---
-    long long xferStart = start + 1;            // () bus request
-    endTime = xferStart + 2 * (blockSize / 4);  // 2 cycles/word × N words
+    // Some cores have S or E: just get from one of them
+    endTime = start + 2 * (blockSize / 4);
     traffic += blockSize;
     caches[cid]->getLine(allocIdx).state = S;
     for (int other : sharers) {
@@ -414,18 +413,11 @@ int main(int argc, char *argv[]) {
         // Issue BusRd
         long long startTime = c->currentTime;
         long long endTime = bus.handleBusRd(c->id, allocIdx, blockId, startTime, allCores.data());
-        long long latency = endTime - startTime;
-        // Determine if this was a cache-to-cache (latency==2N+1) or memory (latency==100)
-        if (latency > 100) {
-          // cache-to-cache: latency == 1 (request) + 2N
-          c->stats.idleCycles += latency;  // all cycles “waited” for data
-          // c->stats.cycles += latency;      // 2N+1 execution cycles
-        } else {
-          // memory fetch: latency == 100
-          c->stats.idleCycles += latency;  // 100 stall cycles
-          c->stats.cycles += 1;            // 1 execution cycle to use data
-        }
-        c->currentTime = endTime + (latency > 100 ? 1 : 0);
+        // Core was stalled waiting: count idle cycles
+        c->stats.idleCycles += (endTime - startTime);
+        // Only 1 cycle to complete the read instruction
+        c->stats.cycles += 1;
+        c->currentTime = endTime;
         c->cache.touchLine(allocIdx);
       }
     } else if (label == 3) {  // Write

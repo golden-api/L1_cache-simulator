@@ -1,50 +1,50 @@
 Core 0:
-  Total instructions: 2
-  Total reads: 2
-  Total writes: 0
-  Total cycles: 2
+  Total instructions: 1
+  Total reads: 0
+  Total writes: 1
+  Total cycles: 1
   Idle cycles: 100
   Misses: 1
-  Miss rate: 50.00%
+  Miss rate: 100.00%
   Evictions: 0
   Writebacks: 0
   Invalidations: 0
-  Data traffic: 32 bytes
+  Data traffic: 0 bytes
 Core 1:
-  Total instructions: 2
-  Total reads: 2
-  Total writes: 0
+  Total instructions: 1
+  Total reads: 0
+  Total writes: 1
   Total cycles: 1
-  Idle cycles: 117
+  Idle cycles: 200
   Misses: 1
-  Miss rate: 50.00%
+  Miss rate: 100.00%
   Evictions: 0
   Writebacks: 0
   Invalidations: 0
-  Data traffic: 32 bytes
+  Data traffic: 0 bytes
 Core 2:
-  Total instructions: 2
-  Total reads: 2
-  Total writes: 0
+  Total instructions: 1
+  Total reads: 0
+  Total writes: 1
   Total cycles: 1
-  Idle cycles: 134
+  Idle cycles: 300
   Misses: 1
-  Miss rate: 50.00%
+  Miss rate: 100.00%
   Evictions: 0
   Writebacks: 0
   Invalidations: 0
-  Data traffic: 32 bytes
+  Data traffic: 0 bytes
 Core 3:
-  Total instructions: 2
-  Total reads: 2
-  Total writes: 0
+  Total instructions: 1
+  Total reads: 0
+  Total writes: 1
   Total cycles: 1
-  Idle cycles: 151
+  Idle cycles: 400
   Misses: 1
-  Miss rate: 50.00%
+  Miss rate: 100.00%
   Evictions: 0
   Writebacks: 0
   Invalidations: 0
-  Data traffic: 32 bytes
+  Data traffic: 0 bytes
 Bus transactions: 4
 Bus traffic: 128 bytes
