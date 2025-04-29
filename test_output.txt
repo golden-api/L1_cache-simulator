@@ -1,31 +1,50 @@
 Core 0:
-Instructions: 4
-Total Cycles: 104:
-Idle Cycles: 0
-Miss Rate: 0.2500
-Evictions: 0
-Writebacks: 1
+  Total instructions: 2497349
+  Total reads: 1489888
+  Total writes: 1007461
+  Total cycles: 5113127
+  Idle cycles: 12469332
+  Misses: 35721
+  Miss rate: 1.43%
+  Evictions: 0
+  Writebacks: 7171
+  Invalidations: 23
+  Data traffic: 1143072 bytes
 Core 1:
-Instructions: 3
-Total Cycles: 303:
-Idle Cycles: 100
-Miss Rate: 0.3333
-Evictions: 0
-Writebacks: 1
+  Total instructions: 2490468
+  Total reads: 1485857
+  Total writes: 1004611
+  Total cycles: 4932629
+  Idle cycles: 12356180
+  Misses: 35198
+  Miss rate: 1.41%
+  Evictions: 0
+  Writebacks: 6780
+  Invalidations: 9
+  Data traffic: 1126336 bytes
 Core 2:
-Instructions: 3
-Total Cycles: 702:
-Idle Cycles: 499
-Miss Rate: 0.3333
-Evictions: 0
-Writebacks: 0
+  Total instructions: 2509057
+  Total reads: 1492629
+  Total writes: 1016428
+  Total cycles: 6010283
+  Idle cycles: 12924018
+  Misses: 40702
+  Miss rate: 1.62%
+  Evictions: 0
+  Writebacks: 10451
+  Invalidations: 28
+  Data traffic: 1302464 bytes
 Core 3:
-Instructions: 4
-Total Cycles: 504:
-Idle Cycles: 300
-Miss Rate: 0.2500
-Evictions: 0
-Writebacks: 1
-System:
-Invalidations: 5
-Bus Traffic: 256 bytes
+  Total instructions: 2503127
+  Total reads: 1493736
+  Total writes: 1009391
+  Total cycles: 5009579
+  Idle cycles: 12527356
+  Misses: 35886
+  Miss rate: 1.43%
+  Evictions: 0
+  Writebacks: 7006
+  Invalidations: 25
+  Data traffic: 1148352 bytes
+Bus transactions: 178740
+Bus traffic: 5725280 bytes

@@ -1,11 +1,21 @@
 CC = g++
-CFLAGS = -std=c++11 -Wall -O2
-TARGET = L1simulator
+CFLAGS = -Wall -std=c++11 -O2
+TARGET = L1simulate
+SOURCES = q.cpp
+OBJECTS = $(SOURCES:.cpp=.o)
 
 all: $(TARGET)
 
-$(TARGET): L1simulator.cpp
-	$(CC) $(CFLAGS) -o $(TARGET) L1simulator.cpp
+$(TARGET): $(OBJECTS)
+	$(CC) $(OBJECTS) -o $(TARGET)
+
+%.o: %.cpp
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(OBJECTS) $(TARGET)
+
+test: $(TARGET)
+	./$(TARGET) -t app1 -s 6 -E 2 -b 5 -o output.txt
+
+.PHONY: all clean test

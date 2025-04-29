@@ -6,6 +6,7 @@
         "new": "cpp",
         "*.tcc": "cpp",
         "ostream": "cpp",
-        "coroutine": "cpp"
+        "coroutine": "cpp",
+        "iomanip": "cpp"
     }
 }
