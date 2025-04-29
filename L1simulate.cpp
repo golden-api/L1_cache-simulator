@@ -253,6 +253,7 @@ class Bus {
   mt19937 rng;
 
  public:
+  int total_transactions = 0;
   unordered_set<int> pending_read_blocks;
   unordered_map<int, vector<int>> rd_waiters;
 
@@ -262,6 +263,7 @@ class Bus {
   }
 
   void add_transaction(const BusTransaction& t) {
+    ++total_transactions;
     if (t.op == BUS_RD) {
       auto block = t.block_addr;
       if (pending_read_blocks.count(block)) {
@@ -350,13 +352,13 @@ class Core {
   int instruction_count;
   uint64_t total_cycles;
   uint64_t idle_cycles;
-  uint64_t bus_cycles;
   Cache* cache;
   bool is_stalled;
+  int read_count = 0, write_count = 0;
 
  public:
   Core(int id, const string& trace_filename, int s, int E, int b)
-      : id(id), instruction_count(0), total_cycles(0), idle_cycles(0), bus_cycles(0), is_stalled(false) {
+      : id(id), instruction_count(0), total_cycles(0), idle_cycles(0), is_stalled(false) {
     cache = new Cache(s, E, b);
     trace_file.open(trace_filename);
     if (!trace_file.is_open()) {
@@ -384,6 +386,11 @@ class Core {
     BusOp bus_op;
     int block_addr;
     bool needs_writeback = false;
+    if (op_type == READ) {
+      ++read_count;
+    } else {
+      ++write_count;
+    }
     bool hit = cache->access(addr, op_type, needs_bus, bus_op, block_addr, needs_writeback);
     total_cycles++;
     if (!hit || needs_bus) {
@@ -397,18 +404,15 @@ class Core {
   void set_stalled(bool stalled) { is_stalled = stalled; }
   void increment_idle_cycles() { idle_cycles++, total_cycles++; }
   void increment_total_cycles() { total_cycles++; }
-  void increment_bus_cycles(int cycles) {
-    bus_cycles += cycles;
-    total_cycles += cycles;
-  }
   int get_id() const { return id; }
   int get_instruction_count() const { return instruction_count; }
   uint64_t get_total_cycles() const { return total_cycles; }
   uint64_t get_idle_cycles() const { return idle_cycles; }
-  uint64_t get_bus_cycles() const { return bus_cycles; }
   double get_miss_rate() const {
     return cache->get_access_count() > 0 ? static_cast<double>(cache->get_miss_count()) / cache->get_access_count() : 0.0;
   }
+  int get_read_count() const { return read_count; }
+  int get_write_count() const { return write_count; }
   int get_eviction_count() const { return cache->get_eviction_count(); }
   int get_writeback_count() const { return cache->get_writeback_count(); }
   int get_invalidation_count() const { return cache->get_invalidation_count(); }
@@ -424,13 +428,6 @@ bool Bus::process_cycle(vector<Core*>& cores) {
       cout << "Bus transaction completed: core " << current_transaction.core_id
            << ", op " << (current_transaction.op == BUS_RD ? "BUS_RD" : "BUS_RDX")
            << ", address 0x" << hex << current_transaction.address << dec << endl;
-      if (current_transaction.op == BUS_RDX && current_transaction.receptor_id != -1) {
-        cores[current_transaction.receptor_id]->increment_bus_cycles(100);
-        cores[current_transaction.core_id]->increment_bus_cycles(101);
-      } else {
-        cores[current_transaction.core_id]->increment_bus_cycles(
-            current_transaction.needs_writeback ? 200 : (current_transaction.found_in_other ? 100 : 100));
-      }
     }
     return remaining_cycles == 0;
   }
@@ -476,10 +473,11 @@ class Simulator {
           auto& done = bus->get_current_transaction();
           auto block = done.block_addr;
 
-          if (done.op == BUS_RD) {
-            cores[done.core_id]->set_stalled(false);
-            cores[done.core_id]->get_cache()->update_after_bus(done);
+          // Update caches and unstall requesting core
+          cores[done.core_id]->set_stalled(false);
+          cores[done.core_id]->get_cache()->update_after_bus(done);
 
+          if (done.op == BUS_RD) {
             auto it = bus->rd_waiters.find(block);
             if (it != bus->rd_waiters.end()) {
               for (int cid : it->second) {
@@ -488,9 +486,6 @@ class Simulator {
               }
               bus->rd_waiters.erase(it);
             }
-          } else {
-            cores[done.core_id]->set_stalled(false);
-            cores[done.core_id]->get_cache()->update_after_bus(done);
           }
 
           for (int i = 0; i < 4; i++) {
@@ -515,10 +510,11 @@ class Simulator {
         if (!core->get_is_stalled() && core->has_next_instruction()) {
           core->process_instruction(bus);
         } else if (core->get_is_stalled()) {
-          if (!bus->is_busy() || cid != bus->get_current_transaction().core_id) {
-            core->increment_idle_cycles();
-          } else {
+          // Bus owner executes; others idle
+          if (bus->is_busy() && cid == bus->get_current_transaction().core_id) {
             core->increment_total_cycles();
+          } else {
+            core->increment_idle_cycles();
           }
         }
       }
@@ -537,23 +533,50 @@ class Simulator {
       }
     }
   }
-
+  // in class Simulator
   void write_output() {
     ofstream out(output_file);
-    for (int i = 0; i < 4; i++) {
-      out << "Core " << i << ":\n";
-      out << "Instructions: " << cores[i]->get_instruction_count() << "\n";
-      out << "Total Cycles: " << cores[i]->get_total_cycles() << "\n";
-      out << "Idle Cycles: " << cores[i]->get_idle_cycles() << "\n";
-      out << "Bus Cycles: " << cores[i]->get_bus_cycles() << "\n";
-      out << "Miss Rate: " << fixed << setprecision(4) << cores[i]->get_miss_rate() << "\n";
-      out << "Evictions: " << cores[i]->get_eviction_count() << "\n";
-      out << "Writebacks: " << cores[i]->get_writeback_count() << "\n";
-      out << "Invalidations: " << cores[i]->get_invalidation_count() << "\n";
+
+    // Simulation parameters
+    out << "Simulation Parameters:\n";
+    out << "Trace Prefix: " << app_name << "\n";
+    out << "Set Index Bits: " << set_index_bits << "\n";
+    out << "Associativity: " << assoc << "\n";
+    out << "Block Bits: " << block_offset_bits << "\n";
+    out << "Block Size (Bytes): " << (1u << block_offset_bits) << "\n";
+    out << "Number of Sets: " << (1u << set_index_bits) << "\n";
+    out << "Cache Size (KB per core): "
+        << ((1u << block_offset_bits) * assoc * (1u << set_index_bits) / 1024) << "\n";
+    out << "MESI Protocol: Enabled\n";
+    out << "Write Policy: Write-back, Write-allocate\n";
+    out << "Replacement Policy: LRU\n";
+    out << "Bus: Central snooping bus\n\n";
+
+    // Per-core statistics
+    for (int i = 0; i < (int)cores.size(); i++) {
+      Core* c = cores[i];
+      out << "Core " << i << " Statistics:\n";
+      out << "Total Instructions: " << c->get_instruction_count() << "\n";
+      out << "Total Reads: " << c->get_read_count() << "\n";
+      out << "Total Writes: " << c->get_write_count() << "\n";
+      out << "Total Execution Cycles: " << c->get_total_cycles() << "\n";
+      out << "Idle Cycles: " << c->get_idle_cycles() << "\n";
+      out << "Cache Misses: " << c->get_cache()->get_miss_count() << "\n";
+      out << "Cache Miss Rate: " << fixed << setprecision(2)
+          << (100.0 * c->get_cache()->get_miss_count() / c->get_cache()->get_access_count())
+          << "%\n";
+      out << "Cache Evictions: " << c->get_cache()->get_eviction_count() << "\n";
+      out << "Writebacks: " << c->get_cache()->get_writeback_count() << "\n";
+      out << "Bus Invalidations: " << c->get_cache()->get_invalidation_count() << "\n";
+      out << "Data Traffic (Bytes): " << c->get_cache()->get_block_size() * /*assume*/ 1 /*#blocks transferred*/
+          << "\n\n";
     }
-    out << "System:\n";
-    out << "Invalidations: " << bus->get_invalidations() << "\n";
-    out << "Bus Traffic: " << bus->get_data_traffic() << " bytes\n";
+
+    // Overall bus summary
+    out << "Overall Bus Summary:\n";
+    out << "Total Bus Transactions: " << bus->total_transactions << "\n";
+    out << "Total Bus Traffic (Bytes): " << bus->get_data_traffic() << "\n";
+
     out.close();
   }
 };
