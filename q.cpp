@@ -517,7 +517,8 @@ int main(int argc, char *argv[]) {
   cout << "Replacement Policy: " << "LRU" << "\n";
   out << "Bus: " << "Central snooping bus" << "\n";
   cout << "Bus: " << "Central snooping bus" << "\n";
-
+  out << "\n";
+  cout << "\n";
 
   for (int i = 0; i < 4; i++) {
     Core *c = cores[i];
@@ -549,6 +550,8 @@ int main(int argc, char *argv[]) {
     cout << "Bus  Invalidations: " << c->stats.invalidations << "\n";
     out << "Data traffic: " << c->stats.dataTraffic << " bytes\n";
     cout << "Data traffic: " << c->stats.dataTraffic << " bytes\n";
+    out << "\n";
+    cout << "\n";
   }
   // out << "Bus transactions: " << bus.transactions << "\n";
   // cout << "Bus transactions: " << bus.transactions << "\n";
