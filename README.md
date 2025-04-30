@@ -117,32 +117,34 @@ Results are both printed to the console and saved to the specified output file.
 For bonus marks, small hand-generated traces can be created to demonstrate phenomena like false sharing. For example:
 
 - **False Sharing Trace**:
-  - Core 0 writes to address `0x1000` (block 0).
-  - Core 1 writes to address `0x1004` (same block).
-  - Repeated reads/writes to these addresses to observe invalidations and bus traffic.
+  - Core 0 writes to address `0x0000` (block 0).
+  - Core 1 writes to address `0x0010` (same block).
+  - Repeated reads/writes to these addresses to observe many invalidations and bus traffic.
 
 Example trace files:
 
-- `false_sharing_proc0.trace`:
+- `app5_proc0.trace`:
 
   ```
-  W 0x1000
-  R 0x1000
-  W 0x1000
+   R 0x00000000  
+   W 0x00000004  
+   R 0x00000008  
+   W 0x0000000C  
   ```
 
-- `false_sharing_proc1.trace`:
+- `app5_proc1.trace`:
 
   ```
-  W 0x1004
-  R 0x1004
-  W 0x1004
+  R 0x00000010
+  W 0x00000014
+  R 0x00000000  
+  W 0x00000018
   ```
 
 Run with:
 
 ```bash
-./L1simulate -t false_sharing -s 6 -E 2 -b 5 -o false_sharing_output.txt
+./L1simulate -t app5 -s 6 -E 2 -b 5 -o false_sharing_output.txt
 ```
 
 ## Notes
