@@ -174,7 +174,8 @@ This detailed breakdown shows how \texttt{main()} ties together cache, bus, and 
     \item Idle Cycle: the cycles in which the core is stalled (bus is busy for other core) ,  waiting to read/writing or (bus transaction is happening) is included in idle cycles. example: (100 cycles for fetching from memory in a write miss is counted in idle cycle).
     \item In bus transactions, we are transferring the whole block rather than the specific word.
     \item For read miss, if the snooping block is in M state then, writeback happens, taking extra 100 cycles , then it is shared to the receiver, taking 2*N cycles more.
-    \item snooping doesn't takes any extra cycles, it happens in that cycle only.
+    \item Snooping doesn't takes any extra cycles, it happens in that cycle only.
+    \item ties between cores are being broken in round robin order and due to which running 10 times wont give a different answer .
 \end{itemize}
 \section{Bonus: False Sharing}
 \subsection{False Sharing vs Non-Sharing Behavior}
@@ -218,9 +219,59 @@ Here, each address lies in a distinct block, so the accesses do not interfere wi
 \paragraph{Conclusion:}
 This controlled experiment confirms that false sharing, even when cores access different words, can significantly degrade performance due to block-level coherence granularity. Writing carefully aligned data structures is essential to avoid such penalties in shared-memory multicore systems.
 
+\section{Graphs of Max execution vs s, E, b}
+As directed in the assignment, we vary each of our three parameter, one at a time and use a python code to observe the graph between Max execution cycle and the respective parameter
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=0.8\linewidth]{plot_b.png}
+  \caption{Maximum Execution Time vs.\ Block Size for App1 and App2.}
+  \label{fig:exec-vs-b}
+\end{figure}
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=0.8\linewidth]{plot_e.png}
+  \caption{Maximum Execution Time vs.\ Block Size for App1 and App2.}
+  \label{fig:exec-vs-b}
+\end{figure}
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=0.8\linewidth]{plot_s.png}
+  \caption{Maximum Execution Time vs.\ Block Size for App1 and App2.}
+  \label{fig:exec-vs-b}
+\end{figure}
+\FloatBarrier
+
+\subsection*{Sensitivity of Maximum Execution Time to Cache Parameters}
+
+\paragraph{Variation with Block Size ($b$)}  
+
+\begin{itemize}
+  \item For very small blocks (2–8 B) the cache brings in too little spatial locality, so miss rates are high and execution time is large.
+  \item As we increase $b$ to 16 B and 32 B, each miss fetches more useful data, miss rate drops sharply, and max execution time falls steeply.
+  \item Beyond 32 B–64 B, further increases in block size give diminishing locality benefits while coherence transfers grow in size, so execution time flattens out.
+\end{itemize}
+
+\paragraph{Variation with Associativity ($E$)}  
+
+\begin{itemize}
+
+  \item Moving from direct‐mapped ($E=1$) to small associativity ($E=2,4$) reduces conflict misses, causing a modest drop in execution time.
+  \item Once $E\ge4$, most conflict misses are eliminated in these traces, so higher associativity yields negligible further improvement.
+  \item The slight rise at $E=2$ for App2 reflects its working set aligning poorly at low associativity, but by $E=4$–$8$ performance stabilizes.
+\end{itemize}
+
+\paragraph{Variation with Number of Sets ($S=2^s$)}
+
+\begin{itemize}
+  \item Increasing the number of sets from 2 to 8 (i.e.\ $s=1\to3$) grows total cache capacity, cutting both capacity and conflict misses and sharply reducing execution time.
+  \item From 16 to 128 sets ($s=4\to7$), most misses are already resolved, so further capacity increases yield only marginal gains.
+  \item The curves for both applications exhibit the same “steep-then-flat” shape, indicating a working-set size that is captured around $S\approx16$–$32$ sets.
+\end{itemize}
 
 \section{Conclusion}
-
+Round Robin Method is the reason why always running would give the same graph and not different 10 times since execution type is fixed. 
 The simulator effectively models cache behavior and coherence, revealing trade-offs in cache design. Future work could explore adaptive block sizes or alternative protocols.
 
 \end{document}
