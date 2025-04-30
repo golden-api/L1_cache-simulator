@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Configuration
-apps    = ["app1" ,"app5"]
+apps    = ["app3" ,"app4","app5"]
 exe     = "./L1simulate"
 outdir  = "logs"
 # Default cache params:
