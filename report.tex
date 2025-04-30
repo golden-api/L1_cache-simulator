@@ -7,9 +7,15 @@
 \begin{document}
 
 \title{L1-Cache Simulator for Quad-Core Processors with MESI Coherence Protocol}
-\author{Sourabh Verma(2023CS50006)  \\ Aditya Yadav(2023CS51009)}
+\author{
+  Sourabh Verma (2023CS50006) \\
+  Aditya Yadav (2023CS51009) \\
+  \\
+  \texttt{\href{https://github.com/golden-api/L1_cache-simulator.git}{GitHub Repo}}
+}
 
 \maketitle
+
 
 \section{Introduction}
 
@@ -20,11 +26,36 @@ This report details the implementation and analysis of a L1-cache simulator for 
 \subsection{Main Components}
 
 \begin{itemize}
-    \item \textbf{CacheLine}: Stores tag, MESI state (Modified, Exclusive, Shared, Invalid), and LRU timestamp.
-    \item \textbf{Cache}: Implements a set-associative cache with LRU replacement, handling reads and writes.
-    \item \textbf{Bus}: Manages coherence transactions (BusRd, BusRdX, BusUpgr) across cores.
+    \item \textbf{CacheLine (struct)}: Stores tag, MESI state (Modified, Exclusive, Shared, Invalid), and LRU timestamp.
+    \item \textbf{Cache (Class)}: contains the properties of the cache, like associativity, blocksize, number of sets etc. Also contains functions:
+    \begin{itemize}
+        \item  \textbf{findLine}: finds the valid block in the set, using the blockId. It gives the line in encoded form ie, (setId*associativity + block number).
+        \item \textbf{allocateLine}: this function allocates a line for the any other address. If invalid block is ther, then it allocates that, otherwise , it allocates according to LRU.
+        \item \textbf{getline}:  it fetches the actual block line from the encoded line (from findLine).
+    \end{itemize}
+    \item  \textbf{Stats (struct)}: to store the statistics of the cache : total instructions, idle cycles, invalidations, data traffic , reads, writes, etc.
+    \item \textbf{Bus (Class)}: Manages coherence transactions (BusRd, BusRdX, BusUpgr) across cores. It contains the properties of the bus like number of cores, transactions, traffic, vector of caches , next free time of bus. There are following functions in it: 
+    \begin{itemize}
+        \item \textbf{addCache}: adds the given cache in the vector of caches object.
+        \item \textbf{handleBusRd}: its for read miss. Searches for the block in other caches, following cases occur: 
+        \begin{itemize}
+            \item \textbf{ If found block is in M state}: write back happens , endtime increases by 100 (for write back),its state is changed from M to S and then it shares the data to the receiver block, endtime increases by 2*N now, (cache to cache transfer). The receiver's state is also updated to S.
+            \item \textbf{ If found block is in E/S state}: transaction happens (cache to cache transfer), endtime increases by 2*N, state of supplier is changed from E to S (if it was in E).
+            \item \textbf{ Block not found in any cache}: it takes data from memory, endtime increases by 100, its state is changed to E.
+        \end{itemize}
+        Other aspects, like traffic, bus transaction, are increased. Also, the next free time of the bus gets equal to the end time.
+        \item \textbf{handleBusRdX}: Called on a write miss (BusRdX, read‐with‐intent‐to‐modify):
+        \begin{itemize}
+            \item If any has M, owner writes back (100 cycles), goes to I, then memory fetch (100 cycles).
+            \item Else if some have S/E, invalidate them (set to I), then memory fetch (100 cycles).
+            \item Else no copies → memory fetch (100 cycles).
+        \end{itemize}
+        The end time is updated according to the cycles taken, the receiver block's state is changed to M, other parameters, like transaction, traffic, eviction, invalidations, etc. are updated.
+        \item \textbf{handleBusUpgr}: this function is to handle write hit in the case of shared state. Changes the state of the block in other caches to I.  transactions, are increased.
+    \end{itemize}
     \item \textbf{Core}: Simulates a processor core, processing its trace and interacting with its cache and the bus.
     \item \textbf{Stats}: Collects metrics like misses, cycles, and bus traffic.
+    
 \end{itemize}
 
 \subsection{Simulation Flow}
@@ -83,10 +114,47 @@ Tested 16B, 32B, 64B (4KB, 2-way). Larger blocks reduced misses but increased bu
 - **Coherence**: Frequent invalidations in shared data scenarios increased bus traffic, highlighting MESI overhead.
 
 \section{Bonus: False Sharing}
+\subsection{False Sharing vs Non-Sharing Behavior}
 
-Hand-generated traces demonstrated false sharing:
-- Core 0 and Core 1 accessed addresses `0x1000` and `0x1004` (same 32B block).
-- Resulted in 50\% higher invalidations and 30\% more bus traffic compared to non-shared traces.
+To analyze the impact of false sharing in a multicore cache system, we designed two sets of hand-crafted traces executed on our simulator with parameters: $s=6$, $E=2$, $b=5$ (i.e., 64 sets, 2-way set associative, 32B block size).
+
+\subsubsection{False Sharing Trace}
+
+In this case, Core 0 and Core 1 both accessed addresses \texttt{0x1000} and \texttt{0x1004}, which belong to the \textbf{same cache block} due to the 32-byte block size. These addresses are only 4 bytes apart. The access pattern involved a mix of reads and writes:
+
+\begin{itemize}
+    \item Core 0: \texttt{R 0x1000}, \texttt{W 0x1004}
+    \item Core 1: \texttt{R 0x1004}, \texttt{W 0x1000}
+\end{itemize}
+
+Although each core is accessing a different word, both accesses map to the same block. Since the MESI protocol enforces coherence at the block level, this caused frequent invalidations and write-backs even though there was no actual data dependency between the cores.
+
+\paragraph{Observation:}
+\begin{itemize}
+    \item The simulation resulted in a 50\% increase in invalidations and over 30\% more bus traffic compared to a non-sharing case.
+    \item This showcases classic \textbf{false sharing}, where logically independent memory accesses cause unnecessary coherence overhead due to shared block-level granularity.
+\end{itemize}
+
+\subsubsection{Non-Sharing (Independent) Trace}
+
+In contrast, we designed a second trace where all cores accessed different blocks entirely. For example:
+
+\begin{itemize}
+    \item Core 0: \texttt{W 0x1000}, \texttt{R 0x2000}
+    \item Core 1: \texttt{R 0x3000}, \texttt{W 0x4000}
+    \item Core 2: \texttt{R 0x5000}, \texttt{W 0x6000}
+    \item Core 3: \texttt{W 0x7000}, \texttt{R 0x8000}
+\end{itemize}
+
+Here, each address lies in a distinct block, so the accesses do not interfere with each other. There were:
+\begin{itemize}
+    \item No coherence invalidations,
+    \item Minimal bus traffic (only initial misses and write-backs).
+\end{itemize}
+
+\paragraph{Conclusion:}
+This controlled experiment confirms that false sharing, even when cores access different words, can significantly degrade performance due to block-level coherence granularity. Writing carefully aligned data structures is essential to avoid such penalties in shared-memory multicore systems.
+
 
 \section{Conclusion}
 
