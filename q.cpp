@@ -351,19 +351,23 @@ int main(int argc, char *argv[]) {
     }
     in.close();
   }
-
+  int lastCore = -1;
   // Simulation
   while (true) {
     int nextCore = -1;
-    long long nextTime = LLONG_MAX;
-    for (int i = 0; i < 4; i++) {
-      Core *c = cores[i];
-      if (c->hasNext() && c->currentTime < nextTime) {
-        nextTime = c->currentTime;
-        nextCore = i;
+    const int N = cores.size();
+    for (int step = 1; step <= N; ++step) {
+      int idx = (lastCore + step) % N;
+      if (cores[idx]->hasNext()) {
+        nextCore = idx;
+        break;
       }
     }
+    // If none have work, we’re done
     if (nextCore < 0) break;
+
+    // 2. Update lastCore and dispatch
+    lastCore = nextCore;
     Core *c = cores[nextCore];
 
     int label = c->trace[c->pc].first;
