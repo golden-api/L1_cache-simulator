@@ -1,50 +1,62 @@
-Core 0:
-  Total instructions: 4
-  Total reads: 3
-  Total writes: 1
-  Total cycles: 4
-  Idle cycles: 716
-  Misses: 4
-  Miss rate: 100.00%
-  Evictions: 0
+Simulation Parameters:
+Trace Prefix: app3
+Set Index Bits: 6
+Associativity: 2
+Block Bits: 5
+Block Size (Bytes): 32
+Number of Sets: 64
+Cache Size (KB per core): 4096
+MESI Protocol: Enabled
+Write Policy: Write-back
+Replacement Policy: LRU
+Bus: Central snooping bus
+Core 0 Statistics:
+  Total instructions: 2
+  Total reads: 2
+  Total writes: 0
+  Total Execution Cycles: 2
+  Idle Cycles: 316
+  Cache Misses: 2
+  Cache Miss Rate: 100.00%
+  Cache Evictions: 0
   Writebacks: 0
-  Invalidations: 1
-  Data traffic: 96 bytes
-Core 1:
+ Bus Invalidations: 0
+  Data traffic: 64 bytes
+Core 1 Statistics:
   Total instructions: 2
   Total reads: 0
   Total writes: 2
-  Total cycles: 2
-  Idle cycles: 400
-  Misses: 2
-  Miss rate: 100.00%
-  Evictions: 0
-  Writebacks: 2
-  Invalidations: 2
+  Total Execution Cycles: 2
+  Idle Cycles: 416
+  Cache Misses: 2
+  Cache Miss Rate: 100.00%
+  Cache Evictions: 0
+  Writebacks: 1
+ Bus Invalidations: 1
   Data traffic: 0 bytes
-Core 2:
+Core 2 Statistics:
   Total instructions: 0
   Total reads: 0
   Total writes: 0
-  Total cycles: 0
-  Idle cycles: 0
-  Misses: 0
-  Miss rate: 0.00%
-  Evictions: 0
+  Total Execution Cycles: 0
+  Idle Cycles: 0
+  Cache Misses: 0
+  Cache Miss Rate: 0.00%
+  Cache Evictions: 0
   Writebacks: 0
-  Invalidations: 0
+ Bus Invalidations: 0
   Data traffic: 0 bytes
-Core 3:
+Core 3 Statistics:
   Total instructions: 0
   Total reads: 0
   Total writes: 0
-  Total cycles: 0
-  Idle cycles: 0
-  Misses: 0
-  Miss rate: 0.00%
-  Evictions: 0
+  Total Execution Cycles: 0
+  Idle Cycles: 0
+  Cache Misses: 0
+  Cache Miss Rate: 0.00%
+  Cache Evictions: 0
   Writebacks: 0
-  Invalidations: 0
+ Bus Invalidations: 0
   Data traffic: 0 bytes
-Bus transactions: 6
-Bus traffic: 256 bytes
+Bus transactions: 4
+Bus traffic: 160 bytes

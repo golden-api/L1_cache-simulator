@@ -321,7 +321,8 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   int blockSize = 1 << b;
-
+  int num_sets = 1 << s;
+  int cache_size = num_sets*E*blockSize;
   Bus bus(blockSize);
   vector<Core *> cores;
   for (int i = 0; i < 4; i++) {
@@ -492,41 +493,67 @@ int main(int argc, char *argv[]) {
     cerr << "Error opening output file " << outFilename << "\n";
     return 1;
   }
+  out << "Simulation Parameters" << ":\n";
+  cout << "Simulation Parameters" << ":\n";
+  out << "Trace Prefix: " << tracePrefix << "\n";
+  cout << "Trace Prefix: " << tracePrefix << "\n";
+  out << "Set Index Bits: " << s << "\n";
+  cout << "Set Index Bits: " << s << "\n";
+  out << "Associativity: " << E << "\n";
+  cout << "Associativity: " << E << "\n";
+  out << "Block Bits: " << b << "\n";
+  cout << "Block Bits: " << b << "\n";
+  out << "Block Size (Bytes): " << blockSize << "\n";
+  cout << "Block Size (Bytes): " << blockSize << "\n";
+  out << "Number of Sets: " << num_sets << "\n";
+  cout << "Number of Sets: " << num_sets << "\n";
+  out << "Cache Size (KB per core): " << cache_size << "\n";
+  cout << "Cache Size (KB per core): " << cache_size << "\n";
+  out << "MESI Protocol: " << "Enabled" << "\n";
+  cout << "MESI Protocol: " << "Enabled" << "\n";
+  out << "Write Policy: " << "Write-back" << "\n";
+  cout << "Write Policy: " << "Write-back" << "\n";
+  out << "Replacement Policy: " << "LRU" << "\n";
+  cout << "Replacement Policy: " << "LRU" << "\n";
+  out << "Bus: " << "Central snooping bus" << "\n";
+  cout << "Bus: " << "Central snooping bus" << "\n";
+
+
   for (int i = 0; i < 4; i++) {
     Core *c = cores[i];
-    out << "Core " << i << ":\n";
-    cout << "Core " << i << ":\n";
-    out << "  Total instructions: " << c->stats.instructions << "\n";
-    cout << "  Total instructions: " << c->stats.instructions << "\n";
-    out << "  Total reads: " << c->stats.reads << "\n";
-    cout << "  Total reads: " << c->stats.reads << "\n";
-    out << "  Total writes: " << c->stats.writes << "\n";
-    cout << "  Total writes: " << c->stats.writes << "\n";
-    out << "  Total cycles: " << c->stats.cycles << "\n";
-    cout << "  Total cycles: " << c->stats.cycles << "\n";
-    out << "  Idle cycles: " << c->stats.idleCycles << "\n";
-    cout << "  Idle cycles: " << c->stats.idleCycles << "\n";
-    out << "  Misses: " << c->stats.misses << "\n";
-    cout << "  Misses: " << c->stats.misses << "\n";
+    out << "Core " << i << " Statistics:\n";
+    cout << "Core " << i << " Statistics:\n";
+    out << "Total instructions: " << c->stats.instructions << "\n";
+    cout << "Total instructions: " << c->stats.instructions << "\n";
+    out << "Total reads: " << c->stats.reads << "\n";
+    cout << "Total reads: " << c->stats.reads << "\n";
+    out << "Total writes: " << c->stats.writes << "\n";
+    cout << "Total writes: " << c->stats.writes << "\n";
+    out << "Total Execution Cycles: " << c->stats.cycles << "\n";
+    cout << "Total Execution Cycles: " << c->stats.cycles << "\n";
+    out << "Idle Cycles: " << c->stats.idleCycles << "\n";
+    cout << "Idle Cycles: " << c->stats.idleCycles << "\n";
+    out << "Cache Misses: " << c->stats.misses << "\n";
+    cout << "Cache Misses: " << c->stats.misses << "\n";
     double missRate = 0.0;
     if (c->stats.reads + c->stats.writes > 0) {
       missRate = (double)c->stats.misses / (c->stats.reads + c->stats.writes) * 100.0;
     }
-    out << "  Miss rate: " << fixed << setprecision(2) << missRate << "%\n";
-    cout << "  Miss rate: " << fixed << setprecision(2) << missRate << "%\n";
-    out << "  Evictions: " << c->stats.evictions << "\n";
-    cout << "  Evictions: " << c->stats.evictions << "\n";
-    out << "  Writebacks: " << c->stats.writebacks << "\n";
-    cout << "  Writebacks: " << c->stats.writebacks << "\n";
-    out << "  Invalidations: " << c->stats.invalidations << "\n";
-    cout << "  Invalidations: " << c->stats.invalidations << "\n";
-    out << "  Data traffic: " << c->stats.dataTraffic << " bytes\n";
-    cout << "  Data traffic: " << c->stats.dataTraffic << " bytes\n";
+    out << "Cache Miss Rate: " << fixed << setprecision(2) << missRate << "%\n";
+    cout << "Cache Miss Rate: " << fixed << setprecision(2) << missRate << "%\n";
+    out << "Cache Evictions: " << c->stats.evictions << "\n";
+    cout << "Cache Evictions: " << c->stats.evictions << "\n";
+    out << "Writebacks: " << c->stats.writebacks << "\n";
+    cout << "Writebacks: " << c->stats.writebacks << "\n";
+    out << "Bus Invalidations: " << c->stats.invalidations << "\n";
+    cout << "Bus  Invalidations: " << c->stats.invalidations << "\n";
+    out << "Data traffic: " << c->stats.dataTraffic << " bytes\n";
+    cout << "Data traffic: " << c->stats.dataTraffic << " bytes\n";
   }
-  out << "Bus transactions: " << bus.transactions << "\n";
-  cout << "Bus transactions: " << bus.transactions << "\n";
-  out << "Bus traffic: " << bus.traffic << " bytes\n";
-  cout << "Bus traffic: " << bus.traffic << " bytes\n";
+  // out << "Bus transactions: " << bus.transactions << "\n";
+  // cout << "Bus transactions: " << bus.transactions << "\n";
+  // out << "Bus traffic: " << bus.traffic << " bytes\n";
+  // cout << "Bus traffic: " << bus.traffic << " bytes\n";
   out.close();
 
   // Cleanup
