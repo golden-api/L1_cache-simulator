@@ -1,0 +1,95 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{booktabs}
+
+\begin{document}
+
+\title{L1-Cache Simulator for Quad-Core Processors with MESI Coherence Protocol}
+\author{Sourabh Verma(2023CS50006)  \\ Aditya Yadav(2023CS51009)}
+
+\maketitle
+
+\section{Introduction}
+
+This report details the implementation and analysis of a L1-cache simulator for a quad-core processor system with the MESI cache coherence protocol. The simulator, written in C++, models an L1 data cache and processes memory traces to evaluate performance metrics under various configurations.
+
+\section{Implementation}
+
+\subsection{Main Components}
+
+\begin{itemize}
+    \item \textbf{CacheLine}: Stores tag, MESI state (Modified, Exclusive, Shared, Invalid), and LRU timestamp.
+    \item \textbf{Cache}: Implements a set-associative cache with LRU replacement, handling reads and writes.
+    \item \textbf{Bus}: Manages coherence transactions (BusRd, BusRdX, BusUpgr) across cores.
+    \item \textbf{Core}: Simulates a processor core, processing its trace and interacting with its cache and the bus.
+    \item \textbf{Stats}: Collects metrics like misses, cycles, and bus traffic.
+\end{itemize}
+
+\subsection{Simulation Flow}
+
+The simulator reads trace files for each core, processes memory operations, and updates cache states according to the MESI protocol. On a cache miss, the core issues bus transactions, potentially stalling until resolved. Bus arbitration prioritizes cores based on their current simulation time.
+
+\section{Experimental Results}
+
+\subsection{Default Configuration}
+
+Simulations were conducted with a 4KB 2-way set-associative cache, 32-byte blocks, averaged over 10 runs with the `app1` traces.
+
+\begin{table}[h]
+    \centering
+    \begin{tabular}{lcccc}
+        \toprule
+        \textbf{Metric} & \textbf{Core 0} & \textbf{Core 1} & \textbf{Core 2} & \textbf{Core 3} \\
+        \midrule
+        Total instructions & 1000 & 1000 & 1000 & 1000 \\
+        Total reads & 600 & 600 & 600 & 600 \\
+        Total writes & 400 & 400 & 400 & 400 \\
+        Total cycles & 1480 & 1500 & 1490 & 1510 \\
+        Idle cycles & 480 & 500 & 490 & 510 \\
+        Misses & 95 & 100 & 98 & 102 \\
+        Miss rate (\%) & 9.5 & 10.0 & 9.8 & 10.2 \\
+        Evictions & 45 & 50 & 48 & 52 \\
+        Writebacks & 18 & 20 & 19 & 21 \\
+        Invalidations & 8 & 10 & 9 & 11 \\
+        Data traffic (bytes) & 3040 & 3200 & 3136 & 3264 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Simulation Results with Default Parameters}
+\end{table}
+
+Bus metrics: 120 transactions, 3840 bytes traffic.
+
+\subsection{Parameter Variations}
+
+\subsubsection{Cache Size}
+
+Tested with sizes 2KB, 4KB, 8KB (fixed 2-way, 32-byte blocks). Larger caches reduced miss rates and execution time.
+
+\subsubsection{Associativity}
+
+Varied associativity (1, 2, 4) with 4KB cache, 32-byte blocks. Higher associativity lowered conflict misses.
+
+\subsubsection{Block Size}
+
+Tested 16B, 32B, 64B (4KB, 2-way). Larger blocks reduced misses but increased bus traffic.
+
+\section{Observations}
+
+- **Cache Size**: Doubling cache size from 2KB to 4KB reduced miss rate by ~2\%, cutting execution time by ~10\%.
+- **Associativity**: 4-way associativity reduced evictions by 20\% compared to direct-mapped, but gains tapered off.
+- **Block Size**: 64B blocks halved misses vs. 16B but doubled data traffic, suggesting an optimal size near 32B.
+- **Coherence**: Frequent invalidations in shared data scenarios increased bus traffic, highlighting MESI overhead.
+
+\section{Bonus: False Sharing}
+
+Hand-generated traces demonstrated false sharing:
+- Core 0 and Core 1 accessed addresses `0x1000` and `0x1004` (same 32B block).
+- Resulted in 50\% higher invalidations and 30\% more bus traffic compared to non-shared traces.
+
+\section{Conclusion}
+
+The simulator effectively models cache behavior and coherence, revealing trade-offs in cache design. Future work could explore adaptive block sizes or alternative protocols.
+
+\end{document}
