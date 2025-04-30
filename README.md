@@ -25,7 +25,7 @@ This will generate the executable `L1simulate`.
 To compile the LaTeX report (`report.tex`) into `report.pdf`, ensure `pdflatex` is installed and run:
 
 ```bash
-make report.pdf
+make report
 ```
 
 Alternatively, `make all` will compile both the simulator and the PDF.
