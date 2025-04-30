@@ -4,11 +4,11 @@ TARGET = L1simulate
 SOURCES = q.cpp
 OBJECTS = $(SOURCES:.cpp=.o)
 LATEX = pdflatex
-LATEXFLAGS = -interaction=nonstopmode
+LATEXFLAGS = -interaction=nonstopmode -halt-on-error
 REPORT = report.tex
 PDF = report.pdf
 
-all: $(TARGET) $(PDF)
+all: $(TARGET)
 
 $(TARGET): $(OBJECTS)
 	$(CC) $(OBJECTS) -o $(TARGET)
@@ -16,9 +16,11 @@ $(TARGET): $(OBJECTS)
 %.o: %.cpp
 	$(CC) $(CFLAGS) -c $< -o $@
 
+report: $(PDF)
+
 $(PDF): $(REPORT)
-	$(LATEX) $(LATEXFLAGS) $(REPORT)
-	$(LATEX) $(LATEXFLAGS) $(REPORT)  # Run twice for references
+	@$(LATEX) $(LATEXFLAGS) $(REPORT) > /dev/null
+	@$(LATEX) $(LATEXFLAGS) $(REPORT) > /dev/null
 
 clean:
 	rm -f $(OBJECTS) $(TARGET) $(PDF) *.aux *.log *.out
@@ -26,4 +28,4 @@ clean:
 test: $(TARGET)
 	./$(TARGET) -t app1 -s 6 -E 2 -b 5 -o output.txt
 
-.PHONY: all clean test
+.PHONY: all clean test report

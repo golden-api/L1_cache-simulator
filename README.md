@@ -5,7 +5,8 @@ This project simulates an L1 data cache for a quad-core processor system, implem
 ## Project Structure
 
 - **Source Code**: `q.cpp` - The main simulator code.
-- **Makefile**: Automates compilation and testing.
+- **Makefile**: Automates compilation, testing, and PDF generation.
+- **LaTeX Report**: `report.tex` - LaTeX source for the project report.
 - **Traces**: (Not included) Memory trace files for each core, e.g., `app1_proc0.trace`, `app1_proc1.trace`, etc.
 - **Output**: Simulation results are written to a specified output file and printed to the console.
 
@@ -19,9 +20,19 @@ make
 
 This will generate the executable `L1simulate`.
 
+### Generating the Report PDF
+
+To compile the LaTeX report (`report.tex`) into `report.pdf`, ensure `pdflatex` is installed and run:
+
+```bash
+make report.pdf
+```
+
+Alternatively, `make all` will compile both the simulator and the PDF.
+
 ### Cleaning Build Artifacts
 
-To remove compiled objects and the executable:
+To remove compiled objects, the executable, and LaTeX auxiliary files (including `report.pdf`):
 
 ```bash
 make clean
