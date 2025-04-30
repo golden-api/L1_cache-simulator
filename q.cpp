@@ -393,22 +393,18 @@ int main(int argc, char *argv[]) {
         c->cache.touchLine(idx);
       } else {
         // Miss
+        c->stats.cycles += 1;
         c->stats.misses++;
         bool evDirty = false;
         bool evLine = false;
         int allocIdx = c->cache.allocateLine(blockId, evDirty, evLine);
-        if (evLine) c->stats.evictions++;  // FIX: Count true eviction (replaced a valid block)
+        if (evLine) c->stats.evictions++;
         // Handle dirty eviction writeback if needed
         if (evDirty) {
           long long flushStart = max(c->currentTime, bus.busNextFree);
           long long flushWait = flushStart - c->currentTime;
-          if (flushWait > 0) {
-            // Bus was busy: count these as idle and cycles
-            c->stats.idleCycles += flushWait;
-            c->stats.cycles += flushWait;  // include as core time (exception)
-          }
+          c->stats.idleCycles += flushWait;
           long long flushEnd = flushStart + 100;
-          c->stats.cycles += 100;  // writing back takes 100 cycles
           bus.transactions++;
           bus.traffic += blockSize;
           c->stats.writebacks++;
@@ -418,9 +414,7 @@ int main(int argc, char *argv[]) {
         // Issue BusRd
         long long startTime = c->currentTime;
         long long endTime = bus.handleBusRd(c->id, allocIdx, blockId, startTime, allCores.data());
-        // Core was stalled waiting: count idle cycles
         c->stats.idleCycles += (endTime - startTime);
-        // Only 1 cycle to complete the read instruction
         c->stats.cycles += 1;
         c->currentTime = endTime;
         c->cache.touchLine(allocIdx);
@@ -444,10 +438,8 @@ int main(int argc, char *argv[]) {
         } else if (st == S) {
           // Hit in S: broadcast invalidate (BusUpgr) then upgrade to M
           long long startTime = c->currentTime;
-          long long endTime = bus.handleBusUpgr(c->id, blockId, startTime,
-                                                allCores.data());
+          long long endTime = bus.handleBusUpgr(c->id, blockId, startTime, allCores.data());
           if (endTime > startTime) {
-            // Bus was busy with others
             c->stats.idleCycles += (endTime - startTime);
           }
           // After invalidation, perform write (1 cycle)
@@ -458,21 +450,19 @@ int main(int argc, char *argv[]) {
         }
       } else {
         // Write miss
+        c->stats.cycles += 1;
         c->stats.misses++;
         bool evDirty = false;
         bool evLine = false;
         int allocIdx = c->cache.allocateLine(blockId, evDirty, evLine);
-        if (evLine) c->stats.evictions++;  // FIX: Count true eviction (replaced a valid block)
-        // Handle dirty eviction writeback if needed
+        if (evLine) c->stats.evictions++;
         if (evDirty) {
           long long flushStart = max(c->currentTime, bus.busNextFree);
           long long flushWait = flushStart - c->currentTime;
           if (flushWait > 0) {
             c->stats.idleCycles += flushWait;
-            c->stats.cycles += flushWait;
           }
           long long flushEnd = flushStart + 100;
-          c->stats.cycles += 100;
           bus.transactions++;
           bus.traffic += blockSize;
           c->stats.writebacks++;
@@ -481,10 +471,9 @@ int main(int argc, char *argv[]) {
         }
         // Issue BusRdX (RWITM): bring block and invalidate others
         long long startTime = c->currentTime;
-        long long endTime = bus.handleBusRdX(c->id, allocIdx, blockId,
-                                             startTime, allCores.data());
+        long long endTime = bus.handleBusRdX(c->id, allocIdx, blockId, startTime, allCores.data());
         c->stats.idleCycles += (endTime - startTime);
-        c->stats.cycles += 1;  // complete the write
+        c->stats.cycles += 1;
         c->currentTime = endTime;
         c->cache.getLine(allocIdx).state = M;
         c->cache.touchLine(allocIdx);
