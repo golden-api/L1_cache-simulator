@@ -16,7 +16,6 @@
 
 \maketitle
 
-
 \section{Introduction}
 
 This report details the implementation and analysis of a L1-cache simulator for a quad-core processor system with the MESI cache coherence protocol. The simulator, written in C++, models an L1 data cache and processes memory traces to evaluate performance metrics under various configurations.
@@ -60,7 +59,7 @@ This report details the implementation and analysis of a L1-cache simulator for 
 
 \subsection{Simulation Flow}
 
-The simulator reads trace files for each core, processes memory operations, and updates cache states according to the MESI protocol. On a cache miss, the core issues bus transactions, potentially stalling until resolved. Bus arbitration prioritizes cores based on their current simulation time.
+The simulator reads trace files for each core, processes memory operations, and updates cache states according to the MESI protocol. On a cache miss, the core issues bus transactions, potentially stalling until resolved. Bus arbitration prioritizes cores based on their current simulation time. Also since I maintain current time for each core cache hit is made simultaneous by independently incrementing in case of cache hit..
 
 \section{Experimental Results}
 
