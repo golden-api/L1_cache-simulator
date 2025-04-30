@@ -52,66 +52,130 @@ This report details the implementation and analysis of a L1-cache simulator for 
         The end time is updated according to the cycles taken, the receiver block's state is changed to M, other parameters, like transaction, traffic, eviction, invalidations, etc. are updated.
         \item \textbf{handleBusUpgr}: this function is to handle write hit in the case of shared state. Changes the state of the block in other caches to I.  transactions, are increased.
     \end{itemize}
-    \item \textbf{Core}: Simulates a processor core, processing its trace and interacting with its cache and the bus.
-    \item \textbf{Stats}: Collects metrics like misses, cycles, and bus traffic.
-    
+    \item \textbf{Core (Class)}:  
+    Represents a single processor core.  Each Core instance holds  
+    \begin{itemize}
+      \item \texttt{id}: the core’s numeric identifier (0–3).  
+      \item \texttt{cache}: its private L1 Cache object.  
+      \item \texttt{trace}: a vector of memory‐access operations, each a pair \texttt{(label, address)} where label = 2 for reads and 3 for writes.  
+      \item \texttt{pc}: program‐counter index into the trace.  
+      \item \texttt{currentTime}: the core’s local cycle count (includes stall time).  
+      \item \texttt{stats}: a Stats struct collecting per‐core metrics.  
+      \item \texttt{bus}: pointer to the shared Bus.  
+    \end{itemize}
+    \item \textbf{The \texttt{main()} Function}
+
+The \texttt{main()} function orchestrates argument parsing, simulator initialization, trace loading, the simulation loop, and final reporting.  Below is a step-by-step breakdown:
+
+\begin{enumerate}
+  \item \textbf{Parse Command-Line Arguments:}
+    \begin{itemize}
+      \item Uses a simple \texttt{for}-loop over \texttt{argv[]} to recognize:
+        \begin{itemize}
+          \item \texttt{-t <tracePrefix>}: base name for per-core trace files (e.g.\ \texttt{app1\_proc0.trace}).
+          \item \texttt{-s <s>}: number of set-index bits ($2^s$ sets).
+          \item \texttt{-E <E>}: associativity (lines per set).
+          \item \texttt{-b <b>}: block-offset bits ($2^b$ bytes per block).
+          \item \texttt{-o <outFilename>}: file to write final statistics.
+          \item \texttt{-h}: print usage help and exit.
+        \end{itemize}
+      \item Validates that all required options are provided; otherwise prints help and returns with an error.
+    \end{itemize}
+
+  \item \textbf{Instantiate Bus and Cores:}
+    \begin{itemize}
+      \item Computes the block size (\texttt{1 << b}) and number of sets (\texttt{1 << s}).
+      \item Creates a \texttt{Bus bus(blockSize);} object.
+      \item Constructs four \texttt{Core*} objects in a loop:
+        \begin{itemize}
+          \item Each \texttt{Core} is initialized with its \texttt{id}, and cache parameters \texttt{(s, E, b)}.
+          \item Sets the core’s \texttt{bus} pointer to \&\texttt{bus}, and calls \texttt{bus.addCache(\&core->cache)}.
+        \end{itemize}
+    \end{itemize}
+
+  \item \textbf{Load Trace Files:}
+    \begin{itemize}
+      \item For each core \texttt{i = 0..3}:
+        \begin{itemize}
+          \item Opens file \texttt{<tracePrefix>\_proc\textit{i}.trace}.
+          \item Reads each line as:
+            \[
+              \langle \texttt{op} \rangle \quad  
+              \texttt{hex addr} \quad  
+              \texttt{dec (ignored)}
+            \]
+          \item Maps \texttt{"R"} to label 2 (read) and \texttt{"W"} to label 3 (write), then stores \texttt{(label, addr)} in \texttt{core->trace}.
+        \end{itemize}
+      \item On file-open failure, prints an error and exits.
+    \end{itemize}
+
+  \item \textbf{Simulation Main Loop:}
+    \begin{enumerate}
+      \item Repeatedly selects the next core to simulate:
+        \begin{itemize}
+          \item Scans all cores for the one with the smallest \texttt{currentTime} that still has pending trace entries (\texttt{hasNext()}).
+          \item If none remain, break out of the loop.
+        \end{itemize}
+      \item For the chosen core:
+        \begin{itemize}
+          \item Fetches the next \texttt{(label, addr)} from \texttt{trace[pc++]}, increments \texttt{stats.instructions}.
+          \item Computes \texttt{blockId = addr >> b}.
+          \item \textbf{If Read (label=2):}
+            \begin{itemize}
+              \item \emph{Hit:} \texttt{findLine()} returns index → +1 cycle, \texttt{touchLine()}.
+              \item \emph{Miss:}
+                \begin{itemize}
+                  \item \texttt{stats.misses++}, call \texttt{allocateLine()} (possibly evict + write back dirty).
+                  \item If eviction dirty, stall until bus free, perform 100-cycle writeback.
+                  \item Issue \texttt{bus.handleBusRd()}, accumulate stall in \texttt{idleCycles}.
+                  \item +1 cycle to complete the read instruction, then  update the lru of the blocks.
+                \end{itemize}
+            \end{itemize}
+          \item \textbf{If Write (label=3):}
+            \begin{itemize}
+              \item \emph{Hit in M/E:} +1 cycle (E→M on E‐hit).
+              \item \emph{Hit in S:} issue \texttt{bus.handleBusUpgr()}, stall, +1 cycle, S→M.
+              \item \emph{Miss:} similar flow to read miss but use \texttt{bus.handleBusRdX()} and set state→M.
+            \end{itemize}
+          \item Update \texttt{stats} (reads/writes, cycles, idleCycles, invalidations, writebacks, traffic).
+        \end{itemize}
+    \end{enumerate}
+
+  \item \textbf{Final Reporting:}
+    \begin{itemize}
+      \item Opens the output file \texttt{outFilename}.
+      \item Writes simulation parameters, then per‐core statistics:
+        \[
+          \begin{aligned}
+            &\text{instructions},\;\text{reads},\;\text{writes},\;\text{cycles},\;\text{idleCycles},\\
+            &\text{misses},\;\text{miss rate},\;\text{evictions},\;\text{writebacks},\;\text{invalidations},\;\text{dataTraffic}
+          \end{aligned}
+        \]
+      \item Mirrors the same to \texttt{stdout} for convenience.
+    \end{itemize}
+
+  \item \textbf{Cleanup and Exit:}
+    \begin{itemize}
+      \item Deletes each dynamically allocated \texttt{Core*} to free memory.
+      \item Returns 0 on success.
+    \end{itemize}
+\end{enumerate}
+
+This detailed breakdown shows how \texttt{main()} ties together cache, bus, and core components to drive the MESI-protocol simulation end-to-end.
+
 \end{itemize}
-
-\subsection{Simulation Flow}
-
-The simulator reads trace files for each core, processes memory operations, and updates cache states according to the MESI protocol. On a cache miss, the core issues bus transactions, potentially stalling until resolved. Bus arbitration prioritizes cores based on their current simulation time. Also since I maintain current time for each core cache hit is made simultaneous by independently incrementing in case of cache hit..
-
-\section{Experimental Results}
-
-\subsection{Default Configuration}
-
-Simulations were conducted with a 4KB 2-way set-associative cache, 32-byte blocks, averaged over 10 runs with the `app1` traces.
-
-\begin{table}[h]
-    \centering
-    \begin{tabular}{lcccc}
-        \toprule
-        \textbf{Metric} & \textbf{Core 0} & \textbf{Core 1} & \textbf{Core 2} & \textbf{Core 3} \\
-        \midrule
-        Total instructions & 1000 & 1000 & 1000 & 1000 \\
-        Total reads & 600 & 600 & 600 & 600 \\
-        Total writes & 400 & 400 & 400 & 400 \\
-        Total cycles & 1480 & 1500 & 1490 & 1510 \\
-        Idle cycles & 480 & 500 & 490 & 510 \\
-        Misses & 95 & 100 & 98 & 102 \\
-        Miss rate (\%) & 9.5 & 10.0 & 9.8 & 10.2 \\
-        Evictions & 45 & 50 & 48 & 52 \\
-        Writebacks & 18 & 20 & 19 & 21 \\
-        Invalidations & 8 & 10 & 9 & 11 \\
-        Data traffic (bytes) & 3040 & 3200 & 3136 & 3264 \\
-        \bottomrule
-    \end{tabular}
-    \caption{Simulation Results with Default Parameters}
-\end{table}
-
-Bus metrics: 120 transactions, 3840 bytes traffic.
-
-\subsection{Parameter Variations}
-
-\subsubsection{Cache Size}
-
-Tested with sizes 2KB, 4KB, 8KB (fixed 2-way, 32-byte blocks). Larger caches reduced miss rates and execution time.
-
-\subsubsection{Associativity}
-
-Varied associativity (1, 2, 4) with 4KB cache, 32-byte blocks. Higher associativity lowered conflict misses.
-
-\subsubsection{Block Size}
-
-Tested 16B, 32B, 64B (4KB, 2-way). Larger blocks reduced misses but increased bus traffic.
-
-\section{Observations}
-
-- **Cache Size**: Doubling cache size from 2KB to 4KB reduced miss rate by ~2\%, cutting execution time by ~10\%.
-- **Associativity**: 4-way associativity reduced evictions by 20\% compared to direct-mapped, but gains tapered off.
-- **Block Size**: 64B blocks halved misses vs. 16B but doubled data traffic, suggesting an optimal size near 32B.
-- **Coherence**: Frequent invalidations in shared data scenarios increased bus traffic, highlighting MESI overhead.
-
+\section{Assumptions}
+\begin{itemize}
+    \item We are using round robin method to sequentialising the cores to process the respective instructions.
+    
+    \item For write miss, if the snooping block is in M state, then it first writebacks to the memory, then it's state is changed to I, then the receiving block fetches the data from the memory and changes it's state to M. So total Idle cycle becomes 100 (write back) + 100 (memory fetch).
+    \item First execution cycle of a cache checks whether hit/miss has happen, then the cycle in which read or write happens (after stalling etc) , it's processing is also included in the exe cycle.
+    \item Execution Cycle: execution cycle only includes the above defined two cycles, i ,e the cycle where hit/miss happens, and the cycle in which read/write happens.
+    \item Idle Cycle: the cycles in which the core is stalled (bus is busy for other core) ,  waiting to read/writing or (bus transaction is happening) is included in idle cycles. example: (100 cycles for fetching from memory in a write miss is counted in idle cycle).
+    \item In bus transactions, we are transferring the whole block rather than the specific word.
+    \item For read miss, if the snooping block is in M state then, writeback happens, taking extra 100 cycles , then it is shared to the receiver, taking 2*N cycles more.
+    \item snooping doesn't takes any extra cycles, it happens in that cycle only.
+\end{itemize}
 \section{Bonus: False Sharing}
 \subsection{False Sharing vs Non-Sharing Behavior}
 

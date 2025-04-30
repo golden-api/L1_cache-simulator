@@ -480,6 +480,10 @@ int main(int argc, char *argv[]) {
       }
     }
   }
+  long long maxExecTime = 0;
+  for (int i = 0; i < 4; ++i) {
+    maxExecTime = max(maxExecTime, cores[i]->currentTime);
+  }
   // Output to file and console
   ofstream out(outFilename);
   if (!out) {
