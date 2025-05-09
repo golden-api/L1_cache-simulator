@@ -22,28 +22,36 @@ class Cache {
       : numSets(1 << s), assoc(E), blockSize(1 << b), setIndexBits(s), useCounter(0) {
     sets.resize(numSets, vector<CacheLine>(assoc));
   }
+  // Find a valid line for blockId in the set (extract set index and tag correctly)
   int findLine(uint32_t blockId) {
     uint32_t setIdx = blockId & ((1 << setIndexBits) - 1);
     uint32_t tag = blockId >> setIndexBits;
     for (int i = 0; i < assoc; i++) {
-      if (sets[setIdx][i].state != I && sets[setIdx][i].tag == tag) {
+      if (sets[setIdx][i].state != I &&
+          sets[setIdx][i].tag == tag) {
         return setIdx * assoc + i;
       }
     }
     return -1;
   }
+  // Allocate a line for blockId (evict LRU if needed)
   int allocateLine(uint32_t blockId, bool &evictedDirty, bool &lineEvicted) {
+    // Compute set index from lower s bits of blockId
     uint32_t setIdx = blockId & ((1 << setIndexBits) - 1);
     uint32_t tag = blockId >> setIndexBits;
+    // Initialize flags
     lineEvicted = false;
     evictedDirty = false;
+    // Look for an invalid line first (no eviction needed)
     for (int i = 0; i < assoc; i++) {
       if (sets[setIdx][i].state == I) {
+        // Found empty line: allocate without eviction
         sets[setIdx][i].tag = tag;
         sets[setIdx][i].state = I;
         return setIdx * assoc + i;
       }
     }
+    // Evict LRU in this set (true eviction)
     int lruIdx = 0;
     long long minUsed = sets[setIdx][0].lastUsed;
     for (int i = 1; i < assoc; i++) {
@@ -52,8 +60,10 @@ class Cache {
         lruIdx = i;
       }
     }
+    // Mark eviction happened
     lineEvicted = true;
     evictedDirty = (sets[setIdx][lruIdx].state == M);
+    // Store new tag, state reset to Invalid until filled by bus transaction
     sets[setIdx][lruIdx].tag = tag;
     sets[setIdx][lruIdx].state = I;
     return setIdx * assoc + lruIdx;
@@ -89,10 +99,15 @@ class Bus {
   Bus(int block) : blockSize(block) {}
   void addCache(Cache *c) { caches.push_back(c); }
 
+  // Handle BusRd: load block (Shared or Exclusive)
   long long handleBusRd(int cid, int allocIdx, uint32_t blockId,
                         long long requestTime, Core *cores[]);
+
+  // Handle BusRdX: read with intent to modify (invalidate others)
   long long handleBusRdX(int cid, int allocIdx, uint32_t blockId,
                          long long requestTime, Core *cores[]);
+
+  // Handle BusUpgr: invalidate shared copies (S->I) for a write hit in S state
   long long handleBusUpgr(int cid, uint32_t blockId, long long requestTime,
                           Core *cores[]);
 };
@@ -113,9 +128,11 @@ class Core {
 vector<Core *> allCores;
 
 // BusRd implementation (for read miss)
-long long Bus::handleBusRd(int cid, int allocIdx, uint32_t blockId, long long requestTime, Core *cores[]) {
+long long Bus::handleBusRd(int cid, int allocIdx, uint32_t blockId,
+                           long long requestTime, Core *cores[]) {
   int ownerM = -1;
   vector<int> sharers;
+  // Find if any other cache has the block (M, S, or E)
   for (int i = 0; i < numCores; i++) {
     if (i == cid) continue;
     Cache *c = caches[i];
@@ -125,8 +142,9 @@ long long Bus::handleBusRd(int cid, int allocIdx, uint32_t blockId, long long re
       if (st == M) {
         ownerM = i;
         break;
-      } else if (st == S || st == E)
+      } else if (st == S || st == E) {
         sharers.push_back(i);
+      }
     }
   }
   long long start = max(requestTime, busNextFree);
@@ -134,43 +152,54 @@ long long Bus::handleBusRd(int cid, int allocIdx, uint32_t blockId, long long re
   transactions++;
 
   if (ownerM != -1) {
+    // Another core has it in M: write back to memory then share
     Cache *ownerCache = caches[ownerM];
     int ownerIdx = ownerCache->findLine(blockId);
-    endTime = start + 100;
-    traffic += blockSize;  // memory write-back
+    endTime = start + 100;  // write-back latency
+    traffic += blockSize;
     cores[ownerM]->stats.writebacks++;
+    // State transition: M -> S for owner (just read, so it becomes shared)
     ownerCache->getLine(ownerIdx).state = S;
-    endTime += 2 * (blockSize / 4);
-    traffic += blockSize;  // cache-to-cache transfer
+    endTime += 2 * (blockSize / 4);  // send block (2 cycles/word)
+    traffic += blockSize;
+    // Requestor gets S (shared)
     caches[cid]->getLine(allocIdx).state = S;
+    // Any E->S in other sharers
     for (int other : sharers) {
       Cache *c = caches[other];
       int idx = c->findLine(blockId);
-      if (idx != -1 && c->getLine(idx).state == E) c->getLine(idx).state = S;
+      if (idx != -1 && c->getLine(idx).state == E) {
+        c->getLine(idx).state = S;
+      }
     }
     cores[cid]->stats.dataTraffic += blockSize;
   } else if (!sharers.empty()) {
+    // Some cores have S or E: just get from one of them
     endTime = start + 2 * (blockSize / 4);
     traffic += blockSize;
     caches[cid]->getLine(allocIdx).state = S;
     for (int other : sharers) {
       Cache *c = caches[other];
       int idx = c->findLine(blockId);
-      if (idx != -1 && c->getLine(idx).state == E) c->getLine(idx).state = S;
+      if (idx != -1 && c->getLine(idx).state == E) {
+        c->getLine(idx).state = S;
+      }
     }
     cores[cid]->stats.dataTraffic += blockSize;
   } else {
+    // No one has it: fetch from memory
     endTime = start + 100;
     traffic += blockSize;
-    caches[cid]->getLine(allocIdx).state = E;
+    caches[cid]->getLine(allocIdx).state = E;  // exclusive copy
     cores[cid]->stats.dataTraffic += blockSize;
   }
 
   busNextFree = endTime;
   return endTime;
 }
-
-long long Bus::handleBusRdX(int cid, int allocIdx, uint32_t blockId, long long requestTime, Core *cores[]) {
+long long Bus::handleBusRdX(int cid, int allocIdx, uint32_t blockId,
+                            long long requestTime, Core *cores[]) {
+  // Gather which other caches hold this block
   vector<int> sharers;
   int ownerM = -1;
   for (int i = 0; i < numCores; i++) {
@@ -179,28 +208,40 @@ long long Bus::handleBusRdX(int cid, int allocIdx, uint32_t blockId, long long r
     int idx = c->findLine(blockId);
     if (idx != -1) {
       State st = c->getLine(idx).state;
-      if (st == M)
+      if (st == M) {
         ownerM = i;
-      else if (st == S || st == E)
+      } else if (st == S || st == E) {
         sharers.push_back(i);
+      }
     }
   }
+
+  // Serialize on the bus
   long long start = max(requestTime, busNextFree);
   long long endTime = start;
   transactions++;
 
+  // 1) If someone has Modified, they must write it back (100 cycles),
+  //    then we read from memory (another 100).
   if (ownerM != -1) {
     Cache *ownerCache = caches[ownerM];
     int ownerIdx = ownerCache->findLine(blockId);
+    // write-back dirty line to memory
     endTime = start + 100;
-    traffic += blockSize;  // write-back
+    traffic += blockSize;
     cores[ownerM]->stats.writebacks++;
     ownerCache->getLine(ownerIdx).state = I;
+    // Invalidate owner's copy
     cores[cid]->stats.invalidations++;
+
+    // now fetch from memory
     endTime += 100;
-    traffic += blockSize;  // memory fetch
+    traffic += blockSize;
     caches[cid]->getLine(allocIdx).state = M;
-  } else if (!sharers.empty()) {
+  }
+  // 2) If others have Shared or Exclusive, just invalidate them and read from memory
+  else if (!sharers.empty()) {
+    // invalidate all sharers
     for (int other : sharers) {
       Cache *c = caches[other];
       int idx = c->findLine(blockId);
@@ -209,10 +250,13 @@ long long Bus::handleBusRdX(int cid, int allocIdx, uint32_t blockId, long long r
         cores[cid]->stats.invalidations++;
       }
     }
+    // then fetch from memory
     endTime = start + 100;
     traffic += blockSize;
     caches[cid]->getLine(allocIdx).state = M;
-  } else {
+  }
+  // 3) No other copies: simple memory fetch
+  else {
     endTime = start + 100;
     traffic += blockSize;
     caches[cid]->getLine(allocIdx).state = M;
@@ -223,7 +267,8 @@ long long Bus::handleBusRdX(int cid, int allocIdx, uint32_t blockId, long long r
 }
 
 // BusUpgr implementation (for write hit in S: invalidate others)
-long long Bus::handleBusUpgr(int cid, uint32_t blockId, long long requestTime, Core *cores[]) {
+long long Bus::handleBusUpgr(int cid, uint32_t blockId,
+                             long long requestTime, Core *cores[]) {
   long long start = max(requestTime, busNextFree);
   long long endTime = start;
   transactions++;
@@ -360,6 +405,8 @@ int main(int argc, char *argv[]) {
           long long flushWait = flushStart - c->currentTime;
           c->stats.idleCycles += flushWait;
           long long flushEnd = flushStart + 100;
+          bus.transactions++;
+          bus.traffic += blockSize;
           c->stats.writebacks++;
           bus.busNextFree = flushEnd;
           c->currentTime = flushEnd;
@@ -412,8 +459,12 @@ int main(int argc, char *argv[]) {
         if (evDirty) {
           long long flushStart = max(c->currentTime, bus.busNextFree);
           long long flushWait = flushStart - c->currentTime;
-          c->stats.idleCycles += flushWait;
+          if (flushWait > 0) {
+            c->stats.idleCycles += flushWait;
+          }
           long long flushEnd = flushStart + 100;
+          bus.transactions++;
+          bus.traffic += blockSize;
           c->stats.writebacks++;
           bus.busNextFree = flushEnd;
           c->currentTime = flushEnd;
@@ -472,10 +523,7 @@ int main(int argc, char *argv[]) {
     out << "Bus Invalidations: " << c->stats.invalidations << "\n";
     out << "Data traffic: " << c->stats.dataTraffic << " bytes\n";
     out << "\n";
-    out << "Overall Bus Summary:\n";
   }
-  out << "Total Bus Transactions: " << bus.transactions << endl;
-  out << "Total Bus Traffic (Bytes): " << bus.traffic << endl;
   out.close();
 
   // Cleanup
