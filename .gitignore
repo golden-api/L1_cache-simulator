@@ -1,7 +1,7 @@
 # Prerequisites
 *.d
 *.py
-q.cpp
+qc.cpp
 # Compiled Object files
 *.slo
 *.lo
